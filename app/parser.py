@@ -100,6 +100,7 @@ class ParsedQuery:
     not_found_detail: str = ""
     namesakes: list = field(default_factory=list)
     extra: dict = field(default_factory=dict)
+    order_asc: bool = False
     script: str = "lat_old"  # lat_old | lat_new | cyr (for Uzbek answers)
     period_label: str = ""
 
@@ -438,7 +439,9 @@ def _find_group(text: str) -> str:
 def _is_top(text: str) -> bool:
     markers = [
         "top", "eng kop", "eng katta", "eng yuqori", "самый", "самых", "самая", "самое",
-        "рейтинг", "ranking", "лидер", "лидир", "peshqadam", "yetakchi", "qaysi", "больше всего", "наибольш",
+        "рейтинг", "ranking", "лидер", "лидир", "peshqadam", "yetakchi",
+        "крупнейш", "активн", "faol", "eng yirik", "eng katta", "eng arzon", "eng qimmat",
+        "дешевле всего", "дороже всего", "самый дешев", "самая дешев", "самый дорог", "самая дорог", "qaysi", "больше всего", "наибольш",
     ]
     return _has_any(text, markers)
 
@@ -454,19 +457,32 @@ def _find_top_n(text: str) -> int:
 
 
 def _find_ids(text: str) -> tuple[int | None, int | None]:
-    normalized = match_key(text)
     match = re.search(r"(?<!\d)(\d{6})(?!\d)", text)
     if not match:
         return None, None
     number = int(match.group(1))
     if number < 100001 or number > 604956:
         return None, None
-    contract_words = ["kontrakt", "контракт", "shartnoma", "шартнома", "договор", "contract"]
-    deal_words = ["bitim", "битим", "сделка", "deal", "transaction"]
-    if any(word in normalized for word in deal_words):
+    # the keyword closest to the number decides ("Kontrakt 101314 bo'yicha nechta bitim")
+    contract_re = r"(kontrakt|контракт|shartnoma|шартнома|договор|contract)"
+    deal_re = r"(bitim|битим|сделк|сделка|deal|transaction)"
+    before, after = text[: match.start()].lower(), text[match.end():].lower()
+
+    def distance(pattern: str) -> int:
+        d = 10**6
+        hits = list(re.finditer(pattern, before))
+        if hits:
+            d = min(d, len(before) - hits[-1].end())
+        hit = re.search(pattern, after)
+        if hit:
+            d = min(d, hit.start())
+        return d
+
+    dc, dd = distance(contract_re), distance(deal_re)
+    if dc < dd:
+        return (number, None) if number <= 106616 else (None, number)
+    if dd < dc:
         return None, number
-    if any(word in normalized for word in contract_words):
-        return number, None
     if number <= 104932:
         return number, None
     return None, number
@@ -613,6 +629,10 @@ def parse_question(question: str) -> ParsedQuery:
         parsed.namesakes = company_namesakes(parsed.company)
 
     parsed.metric = _find_metric(text, question, parsed.product)
+    if _has_any(text, ["arzon", "арзон", "дешев", "дешёв", "deshev", "eng past narx", "самая низкая цена", "минимальн цен"]):
+        parsed.metric, parsed.order_asc = "avg_price", True
+    elif _has_any(text, ["qimmat", "қиммат", "дорог", "самая высокая цена", "eng yuqori narx"]):
+        parsed.metric = "avg_price"
     parsed.top_n = _find_top_n(question)
     parsed.group = _find_group(text)
 

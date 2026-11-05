@@ -12,7 +12,7 @@ from datetime import date
 from .db import fetch_dicts
 from .normalize import match_key
 
-EXTRA_INTENTS = {"usd_rate", "extreme_deal", "distinct_parties", "compare_periods", "status_share"}
+EXTRA_INTENTS = {"usd_rate", "extreme_deal", "distinct_parties", "compare_periods", "status_share", "avg_deal", "contracts_count", "delivery"}
 
 ANNUL = "Аннулирован(Не оплачен)"
 
@@ -28,9 +28,34 @@ def detect_extra_intent(p, question: str) -> str | None:
     if _has(t, r"\bkurs\w*") and not _has(t, r"\b(summa\w*|summ\w*|bitim\w*|sdel\w*|eksport\w*)"):
         p.extra = {}
         return "usd_rate"
-    if _has(t, r"\b(foiz\w*|ulush\w*|protsent\w*|dol[yei]\w*|%)") or "%" in question:
+    # share by contract form / type / auction type ("spot va forvard ulushi")
+    dims = [
+        ("contract_form", r"\b(spot\w*|forvard\w*|forward\w*|fyuchers\w*|fyuchers\w*|forma\w*|form\w* kontrakt\w*)"),
+        ("contract_type", r"\b(eksport\w*|eksport|ichki|vnutren\w*|tip\w* kontrakt\w*|kontrakt turi)"),
+        ("trade_type", r"\b(auksion\w*|aukts\w*|savdo turi|tip\w* torg\w*)"),
+    ]
+    share_words = r"\b(foiz\w*|ulush\w*|protsent\w*|dol[yei]\w*|nisbat\w*|sootnoshen\w*|taqsimot\w*|raspredelen\w*)"
+    if _has(t, share_words) or "%" in question:
+        for dim, pattern in dims:
+            if len(re.findall(pattern, t)) >= 2 or (dim == "trade_type" and _has(t, pattern)):
+                p.extra = {"dim": dim}
+                setattr(p, dim, None)
+                return "status_share"
+        p.extra = {"dim": "status"}
         return "status_share"
+    if _has(t, r"(nedopostav\w*|ne postavlen\w*|postavlen\w*|yetkazilmagan|yetkazib berilmagan|yetkazib berilgan|yetkazilgan miqdor|yetkazilish)"):
+        return "delivery"
+    if _has(t, r"\b(qaysi oy\w*|qaysi oyda|v kakom mesyats\w*|kakoy mesyats|kakom mesyatse)"):
+        p.extra = {"grain": "month", "pick_max": True}
+        return "compare_periods"
+    if _has(t, r"(o.?rtacha|srednyaya|sredniy|srednee)\s+(\w+\s+)?(summa\w*|stoimost\w*|razmer\w*|qiymat\w*)\s+(\w+\s+)?(bitim\w*|sdelk\w*)") or _has(
+        t, r"(bitim\w*)\s+(\w+\s+)?o.?rtacha\s+(summa|qiymat)"):
+        return "avg_deal"
+    if _has(t, r"\b(nechta|qancha|skolko|kolichestvo|chislo)\s+(\w+\s+)?(kontrakt\w*|shartnoma\w*)") or _has(
+        t, r"\b(kontraktlar soni|shartnomalar soni|zaregistrir\w*|royxatdan otgan|royxatga olingan)"):
+        return "contracts_count"
     if not p.statuses and _has(t, r"\b(holat\w*|status\w*|sostoyani\w*)"):
+        p.extra = {"dim": "status"}
         return "status_share"
     kind = None
     if _has(t, r"\b(eng|самая|самой|самую|samaya|samoy|samuyu)\s+(katta|yirik|krupn\w*|bolsh\w*|dorog\w*|qimmat)\s*(\w+\s+)?(bitim|sdelk\w*)") or _has(t, r"\b(krupneysh\w*|maksimaln\w*)\s+(sdelk\w*)"):
@@ -86,7 +111,74 @@ def run_extra(p, build_where, base_result):
         return _compare(p, build_where, base_result)
     if p.intent == "status_share":
         return _status_share(p, build_where, base_result)
+    if p.intent == "avg_deal":
+        return _avg_deal(p, build_where, base_result)
+    if p.intent == "delivery":
+        return _delivery(p, build_where, base_result)
+    if p.intent == "contracts_count":
+        return _contracts_count(p, base_result)
     raise ValueError(p.intent)
+
+
+def _delivery(p, build_where, base_result):
+    where = build_where(p)
+    if not p.statuses:
+        where += " AND status IN ('Оплачен', 'Исполнен', 'Исполнен(Частично)')"
+    sql = f"""
+        SELECT status, COUNT(*) AS deals, SUM(quantity) AS lots,
+               SUM(COALESCE(delivered_quantity, 0)) AS delivered,
+               SUM(quantity - COALESCE(delivered_quantity, 0)) AS undelivered,
+               ROUND(100.0 * SUM(COALESCE(delivered_quantity, 0)) / NULLIF(SUM(quantity), 0), 2) AS delivered_pct
+        FROM deals_enriched WHERE {where}
+        GROUP BY 1 ORDER BY deals DESC
+    """
+    rows = fetch_dicts(sql)
+    return base_result(p, "delivery", rows, sql, {})
+
+
+def _avg_deal(p, build_where, base_result):
+    where = build_where(p)
+    if not p.statuses:
+        where += f" AND status <> '{ANNUL}'"
+    sql = f"""
+        SELECT AVG(amount_uzs) AS avg_uzs, MEDIAN(amount_uzs) AS median_uzs,
+               MIN(amount_uzs) AS min_uzs, MAX(amount_uzs) AS max_uzs, COUNT(*) AS deals
+        FROM deals_enriched WHERE {where}
+    """
+    rows = fetch_dicts(sql)
+    if rows and not rows[0].get("deals"):
+        rows = []
+    return base_result(p, "avg_deal", rows, sql, {"annul_excluded": not p.statuses})
+
+
+def _contracts_count(p, base_result):
+    cond = ["TRUE"]
+    if p.date_from or p.date_to:
+        cond.append(f"registration_date BETWEEN {_lit(p.date_from or p.date_to)} AND {_lit(p.date_to or p.date_from)}")
+    elif p.year_from:
+        cond.append(f"EXTRACT(year FROM registration_date) BETWEEN {p.year_from} AND {p.year_to or p.year_from}")
+        if p.month:
+            cond.append(f"EXTRACT(month FROM registration_date) = {p.month}")
+    if p.product.tnveds:
+        cond.append("tnved_code IN (" + ", ".join(f"'{c}'" for c in p.product.tnveds) + ")")
+    if p.regions:
+        cond.append("region_uz IN (" + ", ".join("'" + r.replace("'", "''") + "'" for r in p.regions) + ")")
+    if p.contract_type:
+        cond.append(f"contract_type = '{p.contract_type}'")
+    if p.contract_form:
+        cond.append(f"contract_form = '{p.contract_form}'")
+    if p.company:
+        cond.append(f"seller_inn = '{p.company.inn}'")
+    sql = f"""
+        SELECT COUNT(*) AS contracts, COUNT(DISTINCT seller_inn) AS sellers,
+               COUNT(DISTINCT tnved_code) AS products,
+               MIN(registration_date) AS first_date, MAX(registration_date) AS last_date
+        FROM contracts_full WHERE {" AND ".join(cond)}
+    """
+    rows = fetch_dicts(sql)
+    if rows and not rows[0].get("contracts"):
+        rows = []
+    return base_result(p, "contracts_count", rows, sql, {})
 
 
 def _lit(d: date) -> str:
@@ -209,18 +301,21 @@ def _status_share(p, build_where, base_result):
         where = build_where(p)
     finally:
         p.statuses = saved
+    dim = (p.extra or {}).get("dim", "status")
+    if dim not in {"status", "contract_form", "contract_type", "trade_type"}:
+        dim = "status"
     sql = f"""
-        SELECT status, COUNT(*) AS deals,
+        SELECT {dim} AS status, COUNT(*) AS deals,
                ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) AS share_pct,
                SUM(amount_uzs) AS total_uzs,
                ROUND(100.0 * SUM(amount_uzs) / SUM(SUM(amount_uzs)) OVER (), 2) AS amount_share_pct
         FROM deals_enriched
         WHERE {where}
-        GROUP BY status
+        GROUP BY 1
         ORDER BY deals DESC
     """
     rows = fetch_dicts(sql)
-    return base_result(p, "status_share", rows, sql, {"focus": saved})
+    return base_result(p, "status_share", rows, sql, {"focus": saved, "dim": dim})
 
 
 # ---------------------------------------------------------------------------
@@ -323,6 +418,15 @@ def format_extra(result, p, fmt_num, fmt_money, fmt_date) -> str:
                 lines.append(f"• {period}: {fmt_money(r['total_uzs'], p.lang)}, {fmt_num(r['deals'])} ta bitim{vol}{change}")
             else:
                 lines.append(f"• {period}: {fmt_money(r['total_uzs'], p.lang)}, {fmt_num(r['deals'])} сделок{vol}{change}")
+        if result.meta.get("pick_max") and rows:
+            top_d = max(rows, key=lambda r: r["deals"] or 0)
+            top_s = max(rows, key=lambda r: r["total_uzs"] or 0)
+            if uz:
+                lines.insert(0, f"Eng ko‘p bitim: {top_d['period']} ({fmt_num(top_d['deals'])} ta); "
+                                f"eng katta summa: {top_s['period']} ({fmt_money(top_s['total_uzs'], p.lang)}).")
+            else:
+                lines.insert(0, f"Больше всего сделок: {top_d['period']} ({fmt_num(top_d['deals'])}); "
+                                f"наибольшая сумма: {top_s['period']} ({fmt_money(top_s['total_uzs'], p.lang)}).")
         lines.append(
             "Foiz o‘zgarish oldingi davrga nisbatan; summa annul qilinganlarsiz, bitimlar soni barcha holatlar bilan."
             if uz else
@@ -330,8 +434,56 @@ def format_extra(result, p, fmt_num, fmt_money, fmt_date) -> str:
         )
         return "\n".join(lines)
 
+    if result.intent == "avg_deal":
+        r = rows[0]
+        if uz:
+            return (f"Bitimning o‘rtacha summasi: {fmt_money(r['avg_uzs'], p.lang)} "
+                    f"(mediana {fmt_money(r['median_uzs'], p.lang)}, min {fmt_num(r['min_uzs'])}, max {fmt_num(r['max_uzs'])}; "
+                    f"{fmt_num(r['deals'])} ta bitim).")
+        return (f"Средняя сумма одной сделки: {fmt_money(r['avg_uzs'], p.lang)} "
+                f"(медиана {fmt_money(r['median_uzs'], p.lang)}, min {fmt_num(r['min_uzs'])}, max {fmt_num(r['max_uzs'])}; "
+                f"{fmt_num(r['deals'])} сделок).")
+
+    if result.intent == "delivery":
+        lines = ["Yetkazib berish (lotlarda):" if uz else "Поставка (в лотах):"]
+        for r in rows:
+            if uz:
+                lines.append(f"• {r['status']}: {fmt_num(r['deals'])} ta bitim, sotilgan {fmt_num(r['lots'])} lot, "
+                             f"yetkazilgan {fmt_num(r['delivered'])} ({fmt_num(r['delivered_pct'])}%), "
+                             f"yetkazilmagan {fmt_num(r['undelivered'])} lot")
+            else:
+                lines.append(f"• {r['status']}: {fmt_num(r['deals'])} сделок, продано {fmt_num(r['lots'])} лотов, "
+                             f"поставлено {fmt_num(r['delivered'])} ({fmt_num(r['delivered_pct'])}%), "
+                             f"недопоставлено {fmt_num(r['undelivered'])} лотов")
+        return "\n".join(lines)
+
+    if result.intent == "contracts_count":
+        r = rows[0]
+        if uz:
+            return (f"Ro‘yxatdan o‘tgan kontraktlar: {fmt_num(r['contracts'])} ta "
+                    f"(sotuvchilar: {fmt_num(r['sellers'])}, tovar turlari: {fmt_num(r['products'])}; "
+                    f"ro‘yxatga olish sanalari {fmt_date(r['first_date'])} – {fmt_date(r['last_date'])}).")
+        return (f"Зарегистрировано контрактов: {fmt_num(r['contracts'])} "
+                f"(продавцов: {fmt_num(r['sellers'])}, видов товаров: {fmt_num(r['products'])}; "
+                f"даты регистрации {fmt_date(r['first_date'])} – {fmt_date(r['last_date'])}).")
+
     if result.intent == "status_share":
-        lines = ["Holatlar ulushi (bitimlar soni bo‘yicha):" if uz else "Доли статусов (по количеству сделок):"]
+        dim = result.meta.get("dim", "status")
+        heads = {
+            "status": ("Holatlar ulushi (bitimlar soni bo‘yicha):", "Доли статусов (по количеству сделок):"),
+            "contract_form": ("Kontrakt shakllari ulushi (bitimlar soni bo‘yicha):", "Доли форм контракта (по количеству сделок):"),
+            "contract_type": ("Kontrakt turlari ulushi (bitimlar soni bo‘yicha):", "Доли типов контракта (по количеству сделок):"),
+            "trade_type": ("Savdo turlari ulushi (bitimlar soni bo‘yicha):", "Доли типов торгов (по количеству сделок):"),
+        }[dim]
+        lines = [heads[0] if uz else heads[1]]
+        focus = result.meta.get("focus") or []
+        if dim == "status" and focus:
+            picked = [r for r in rows if r["status"] in focus]
+            for r in picked:
+                lines.insert(0, (f"{r['status']}: {fmt_num(r['share_pct'])}% bitimlar ({fmt_num(r['deals'])} ta), "
+                                 f"summa bo‘yicha {fmt_num(r['amount_share_pct'])}%." if uz else
+                                 f"{r['status']}: {fmt_num(r['share_pct'])}% сделок ({fmt_num(r['deals'])}), "
+                                 f"по сумме {fmt_num(r['amount_share_pct'])}%."))
         for r in rows:
             if uz:
                 lines.append(f"• {r['status']}: {fmt_num(r['deals'])} ta — {fmt_num(r['share_pct'])}% "

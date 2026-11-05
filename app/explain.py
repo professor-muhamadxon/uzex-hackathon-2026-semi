@@ -48,8 +48,8 @@ def explain(result, p) -> str:
         text = ("reyestrdagi yozuv o‘zgarishsiz ko‘rsatildi; birlik narxi = summa ÷ (miqdor × lot)"
                 if uz else "показана запись реестра без изменений; цена за единицу = сумма ÷ (количество × лот)")
     elif intent in {"status_stats", "status_share"}:
-        text = ("bitimlar holati bo‘yicha guruhlandi; ulush = shu holatdagi bitimlar ÷ jami bitimlar × 100"
-                if uz else "сделки сгруппированы по статусу; доля = сделки со статусом ÷ все сделки × 100")
+        text = ("bitimlar guruhlandi; ulush = guruhdagi bitimlar ÷ jami bitimlar × 100"
+                if uz else "сделки сгруппированы; доля = сделки группы ÷ все сделки × 100")
     elif intent == "broker_stats":
         text = ("broker sotuvchi yoki xaridor tomonida qatnashgan bitimlar (har bitim bir marta) hisoblandi"
                 if uz else "учтены сделки, где брокер на стороне продавца или покупателя (каждая сделка один раз)")
@@ -66,6 +66,15 @@ def explain(result, p) -> str:
         else:
             text = ("bitimlar sana va vaqt bo‘yicha saralanib, birinchisi olindi"
                     if uz else "сделки отсортированы по дате и времени, взята первая")
+    elif intent == "delivery":
+        text = ("«Поставлено» ustuni bo‘yicha: yetkazilmagan = sotilgan lotlar − yetkazilgan lotlar (to‘langan va ijro etilgan bitimlar)"
+                if uz else "по полю «Поставлено»: недопоставлено = куплено лотов − поставлено лотов (оплаченные и исполненные сделки)")
+    elif intent == "avg_deal":
+        text = ("bitimlar so‘mdagi summasining o‘rtachasi va medianasi (bekor qilinganlarsiz)"
+                if uz else "среднее и медиана суммы сделки в сумах (без аннулированных)")
+    elif intent == "contracts_count":
+        text = ("kontrakt kartochkalari ro‘yxatdan o‘tgan sanasi bo‘yicha sanaldi"
+                if uz else "карточки контрактов подсчитаны по дате регистрации")
     elif intent == "distinct_parties":
         text = ("noyob INNlar soni sanaldi (bir kompaniya bir marta)"
                 if uz else "подсчитано число уникальных ИНН (каждая компания один раз)")

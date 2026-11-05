@@ -271,6 +271,11 @@ def _format_top(result: QueryResult, p: ParsedQuery) -> str:
     group = result.meta.get("group", "company")
     metric = result.meta.get("metric", "amount")
     group_label = GROUP_UZ.get(group, group) if lang == "uz" else GROUP_RU.get(group, group)
+    if group == "company" and p.company_role in {"buyer", "seller"}:
+        group_label = {
+            ("uz", "buyer"): "xaridor", ("uz", "seller"): "sotuvchi",
+            ("ru", "buyer"): "покупателей", ("ru", "seller"): "продавцов",
+        }[(lang, p.company_role)]
     metric_label = METRIC_UZ.get(metric, metric) if lang == "uz" else METRIC_RU.get(metric, metric)
     header = (
         f"Top {len(result.rows)} {group_label} ({metric_label} bo‘yicha):"
@@ -297,6 +302,8 @@ def _format_top(result: QueryResult, p: ParsedQuery) -> str:
             value_text = fmt_usd(row.get("value"), lang)
         elif metric == "avg_price":
             value_text = f"{fmt_num(row.get('value'))} {fmt_currency(row.get('currency'), lang)}"
+            if row.get("unit"):
+                value_text += f" / {fmt_unit(row.get('unit'), lang)}"
         else:
             value_text = fmt_money(row.get("value"), lang)
         lines.append(f"{index}. {label}{code_text} — {value_text}")
@@ -364,6 +371,10 @@ def _format_product(result: QueryResult, p: ParsedQuery) -> str:
             f"контрактов: {fmt_num(row.get('contracts'))}, "
             f"общая сумма: {fmt_money(row.get('total_uzs'), lang)}."
         )
+    export_usd = row.get("export_usd") or 0
+    if export_usd:
+        lines[-1] += (f" Shundan dollardagi (eksport) bitimlar: {fmt_usd(export_usd, lang)}."
+                      if lang == "uz" else f" В том числе долларовые (экспортные) сделки: {fmt_usd(export_usd, lang)}.")
     units = result.meta.get("units") or []
     if units:
         lines.append("Hajm:" if lang == "uz" else "Объём:")

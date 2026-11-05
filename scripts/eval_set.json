@@ -351,5 +351,75 @@
   "lang": "ru",
   "q": "Курс доллара на 01.01.2021",
   "type": "not_found"
+ },
+ {
+  "id": 53,
+  "lang": "uz-lat",
+  "q": "Qaysi viloyatda paxta eng arzon sotilgan?",
+  "type": "contains",
+  "gold": "SELECT region_uz FROM deals_enriched WHERE tnved_code='520100' AND {A} GROUP BY 1 ORDER BY AVG(unit_price) LIMIT 1"
+ },
+ {
+  "id": 54,
+  "lang": "ru",
+  "q": "Средняя сумма одной сделки в 2025 году",
+  "type": "num",
+  "gold": "SELECT AVG(amount_uzs) FROM deals_enriched WHERE year(deal_date)=2025 AND {A}"
+ },
+ {
+  "id": 55,
+  "lang": "ru",
+  "q": "Сколько контрактов зарегистрировано в 2024 году?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM contracts_full WHERE year(registration_date)=2024"
+ },
+ {
+  "id": 56,
+  "lang": "uz-lat",
+  "q": "2025-yilda spot va forvard bitimlari ulushi",
+  "type": "contains",
+  "gold": "SELECT CAST(ROUND(100.0*COUNT(*) FILTER (WHERE contract_form='Спот')/COUNT(*),2) AS VARCHAR) FROM deals_enriched WHERE year(deal_date)=2025"
+ },
+ {
+  "id": 57,
+  "lang": "ru",
+  "q": "Кто крупнейший покупатель хлопка в 2025 году?",
+  "type": "contains",
+  "gold": "SELECT buyer_inn FROM deals_enriched WHERE tnved_code='520100' AND year(deal_date)=2025 AND {A} GROUP BY 1 ORDER BY SUM(amount_uzs) DESC LIMIT 1"
+ },
+ {
+  "id": 58,
+  "lang": "ru",
+  "q": "Сколько лотов недопоставлено по частично исполненным сделкам?",
+  "type": "num",
+  "gold": "SELECT SUM(quantity-COALESCE(delivered_quantity,0)) FROM deals_enriched WHERE status='Исполнен(Частично)'"
+ },
+ {
+  "id": 59,
+  "lang": "ru",
+  "q": "Средняя цена пшеницы в Кашкадарьинской области в 2024 году",
+  "type": "num",
+  "gold": "SELECT AVG(unit_price) FROM deals_enriched WHERE tnved_code='100199' AND year(deal_date)=2024 AND region_uz='Qashqadaryo viloyati' AND {A}"
+ },
+ {
+  "id": 60,
+  "lang": "uz-lat",
+  "q": "2025-yilda qaysi oyda eng ko'p bitim bo'lgan?",
+  "type": "contains",
+  "gold": "SELECT strftime(deal_date,'%Y-%m') FROM deals_enriched WHERE year(deal_date)=2025 GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 1"
+ },
+ {
+  "id": 61,
+  "lang": "uz-lat",
+  "q": "Kontrakt 101314 bo'yicha nechta bitim tuzilgan?",
+  "type": "contains",
+  "gold": "SELECT CAST(COUNT(*) AS VARCHAR) FROM deals_enriched WHERE contract_id=101314"
+ },
+ {
+  "id": 62,
+  "lang": "ru",
+  "q": "Какой процент сделок аннулирован в 2024 году?",
+  "type": "contains",
+  "gold": "SELECT CAST(ROUND(100.0*COUNT(*) FILTER (WHERE status='Аннулирован(Не оплачен)')/COUNT(*),2) AS VARCHAR) FROM deals_enriched WHERE year(deal_date)=2024"
  }
 ]

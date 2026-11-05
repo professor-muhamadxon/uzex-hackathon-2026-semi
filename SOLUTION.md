@@ -54,7 +54,7 @@ FastAPI (veb-sahifa + `/ask` API), OpenAI-mos LLM mijozi (ixtiyoriy fallback), D
 7. **Javob savol tilida:** maʼlumotdagi holatlar, regionlar, ölçov birliklari, kontrakt turlari va asosiy
    tovar nomlari savol tiliga öğiriladi (tovarning reyestrdagi aniq nomi «…» ichida saqlanadi);
    özbekça javob savol yozuvida — eski lotin, **yangi alifbo (ö ğ ç ş)** yoki kirill.
-8. **Regressiya testlari:** `scripts/smoke_test.py` (33 savol) va `scripts/eval.py` (52 savol).
+8. **Regressiya testlari:** `scripts/smoke_test.py` (33 savol) va `scripts/eval.py` (62 savol).
    Eval'dagi oltin javoblar agent kodidan **mustaqil**, qölda yozilgan SQL bilan hisoblanadi.
 
 ## 4. Maʼlumot tozalaş
@@ -83,7 +83,7 @@ FastAPI (veb-sahifa + `/ask` API), OpenAI-mos LLM mijozi (ixtiyoriy fallback), D
 
 Jami summa / bitimlar soni / hajm; örtaça, min va max narx; top-N (kompaniya, tovar, region, broker);
 kompaniya profili (nom yoki INN); tovar statistikasi; kontrakt va bitim kartoçkasi; eksport (USD va
-sömda); holatlar va ularning ulushi (%); USD kursi (sana yoki davr); eng katta, eng kiçik, eng birinçi
+sömda); holatlar, kontrakt şakli/turi va savdo turi ulushi (%); bitimning örtaça summasi; röyxatdan ötgan kontraktlar soni; yetkazib beriş (yetkazilmagan lotlar); eng arzon/qimmat region yoki kompaniya; eng faol xaridorlar; USD kursi (sana yoki davr); eng katta, eng kiçik, eng birinçi
 va eng oxirgi bitim; noyob xaridor va sotuvçilar soni; yillar va oylar böyiça taqqoslaş (% özgariş).
 Nisbiy davrlar: ötgan yil/oy/hafta, bu yil, çoraklar (1-çorak, III квартал), yarim yillik,
 “oxirgi N kun/oy”, “yanvar–mart”, “с … по …”, bugun/kecha.
@@ -94,12 +94,12 @@ Nisbiy davrlar: ötgan yil/oy/hafta, bu yil, çoraklar (1-çorak, III кварт
 
 | Guruh | Savollar | Töğri |
 |---|---:|---:|
-| özbek, eski lotin | 15 | 15 |
+| özbek, eski lotin | 19 | 19 |
 | özbek, kirill | 6 | 6 |
 | özbek, yangi lotin | 5 | 5 |
-| rus | 26 | 26 |
+| rus | 32 | 32 |
 | şundan tuzoq savollar (“topilmadi”) | 11 | 11 |
-| **Jami** | **52** | **52 (100%)** |
+| **Jami** | **62** | **62 (100%)** |
 
 Örtaça javob vaqti 0,02 s, eng uzuni 0,04 s. Tasdiqlanmagan raqamli javoblar: 0.
 Eslatma: test töplami işlab çiqiş davomida tuzilgan, şuning uçun yangi turdagi savollarda aniqlik
@@ -136,5 +136,5 @@ soliştiriladi. Maʼlumot bölmasa (davr taşqarida, kompaniya yöq, körsatkiç
 javobda “Qanday hisoblandi” bandi bor, “SQL” tugmasi esa sörovning özini oçadi. Javob savol tilida va
 yozuvida (rus, özbek lotin, yangi alifbo, kirill). Qöqon universiteti Andijon filiali (KUAF) iştirokçilari
 tomonidan tayyorlandi. Texnologiyalar: Python, DuckDB, sqlglot, rapidfuzz,
-aiogram, FastAPI, Docker. Tekşiruv: oltin javoblari mustaqil SQL bilan hisoblangan 52 ta savol
-(şundan 11 tasi tuzoq) — 52/52, örtaça javob vaqti 1 soniyadan kam.
+aiogram, FastAPI, Docker. Tekşiruv: oltin javoblari mustaqil SQL bilan hisoblangan 62 ta savol
+(şundan 11 tasi tuzoq) — 62/62, örtaça javob vaqti 1 soniyadan kam.

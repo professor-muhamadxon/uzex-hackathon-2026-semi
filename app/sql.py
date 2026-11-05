@@ -133,7 +133,7 @@ def filter_summary(p: ParsedQuery) -> str:
     if p.product.label:
         parts.append(("tovar: " if uz else "товар: ") + p.product.label)
     if p.regions:
-        parts.append(("region: " if uz else "регион: ") + ", ".join(p.regions))
+        parts.append(("region (sotuvchi ombori): " if uz else "регион (склад продавца): ") + ", ".join(p.regions))
     if p.company:
         parts.append(("kompaniya: " if uz else "компания: ") + p.company.name)
     if p.broker:
@@ -272,6 +272,7 @@ def _value_expr(metric: str, alias: str = "d", distinct_deals: bool = False) -> 
 
 def top_query(p: ParsedQuery) -> QueryResult:
     where = build_where(p)
+    direction = "ASC" if p.order_asc else "DESC"
     group = p.group or "company"
     metric = p.metric
     # Summing volume across different units is meaningless; fall back to money.
@@ -290,7 +291,7 @@ def top_query(p: ParsedQuery) -> QueryResult:
                 LEFT JOIN participants p ON p.inn = d.{inn_col}
                 WHERE {where}
                 GROUP BY d.{inn_col}, p.name
-                ORDER BY value DESC NULLS LAST
+                ORDER BY value {direction} NULLS LAST
                 LIMIT {p.top_n}
             """
         else:
@@ -308,7 +309,7 @@ def top_query(p: ParsedQuery) -> QueryResult:
                 FROM sides s
                 LEFT JOIN participants p ON p.inn = s.inn
                 GROUP BY s.inn, p.name
-                ORDER BY value DESC NULLS LAST
+                ORDER BY value {direction} NULLS LAST
                 LIMIT {p.top_n}
             """
     elif group == "product":
@@ -322,7 +323,7 @@ def top_query(p: ParsedQuery) -> QueryResult:
                 FROM deals_enriched d
                 WHERE {where}
                 GROUP BY d.tnved_code, d.unit
-                ORDER BY value DESC NULLS LAST
+                ORDER BY value {direction} NULLS LAST
                 LIMIT {p.top_n}
             """
         else:
@@ -334,7 +335,7 @@ def top_query(p: ParsedQuery) -> QueryResult:
                 FROM deals_enriched d
                 WHERE {where}
                 GROUP BY d.tnved_code
-                ORDER BY value DESC NULLS LAST
+                ORDER BY value {direction} NULLS LAST
                 LIMIT {p.top_n}
             """
     elif group == "region":
@@ -345,7 +346,7 @@ def top_query(p: ParsedQuery) -> QueryResult:
             FROM deals_enriched d
             WHERE {where}
             GROUP BY d.region_uz
-            ORDER BY value DESC NULLS LAST
+            ORDER BY value {direction} NULLS LAST
             LIMIT {p.top_n}
         """
     elif group == "broker":
@@ -363,7 +364,7 @@ def top_query(p: ParsedQuery) -> QueryResult:
             FROM sides s
             LEFT JOIN brokers b ON b.broker_code = s.broker_code
             GROUP BY s.broker_code, b.name
-            ORDER BY value DESC NULLS LAST
+            ORDER BY value {direction} NULLS LAST
             LIMIT {p.top_n}
         """
     else:
@@ -373,6 +374,13 @@ def top_query(p: ParsedQuery) -> QueryResult:
             WHERE {where}
         """
     rows = fetch_dicts(sql)
+    if metric == "avg_price" and rows:
+        # attach the unit/currency when the filtered deals share a single one
+        uc = fetch_dicts(f"SELECT DISTINCT unit, currency FROM deals_enriched WHERE {where} LIMIT 3")
+        if len(uc) == 1:
+            for row in rows:
+                row.setdefault("unit", uc[0]["unit"])
+                row.setdefault("currency", uc[0]["currency"])
     return _base_result(p, "top", rows, sql, meta)
 
 
