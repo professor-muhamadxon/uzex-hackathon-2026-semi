@@ -29,3 +29,6 @@ SQL_TIMEOUT = float(os.getenv("SQL_TIMEOUT", "10"))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 
 MAX_RESULT_ROWS = int(os.getenv("MAX_RESULT_ROWS", "200"))
+
+# LLM may write SQL only when explicitly enabled; by default it only classifies meaning (app/semantic.py)
+LLM_SQL = os.getenv("LLM_SQL", "0").strip().lower() in {"1", "true", "yes", "on"}

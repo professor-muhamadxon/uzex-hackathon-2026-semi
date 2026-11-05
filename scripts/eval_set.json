@@ -510,5 +510,47 @@
   "lang": "ru",
   "q": "Компьютер на сколько процентов подорожал за весь период?",
   "type": "not_found"
+ },
+ {
+  "id": 76,
+  "lang": "ru",
+  "q": "Сколько сделок в выходные дни?",
+  "type": "contains",
+  "gold": "SELECT 'В субботу и воскресенье сделок нет (в данных 0).'"
+ },
+ {
+  "id": 77,
+  "lang": "uz-cyr",
+  "q": "Вилоятлар бўйича пахта хажми",
+  "type": "num",
+  "gold": "SELECT SUM(volume) FROM deals_enriched WHERE tnved_code='520100' AND unit='килограмм' AND {A} AND region_uz='Toshkent shahri'"
+ },
+ {
+  "id": 78,
+  "lang": "ru",
+  "q": "Сколько компаний в каждом регионе?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM participants WHERE region='Toshkent shahri'"
+ },
+ {
+  "id": 79,
+  "lang": "uz-lat",
+  "q": "Qaysi viloyatda eng ko'p kompaniya ro'yxatdan o'tgan?",
+  "type": "contains",
+  "gold": "SELECT region FROM participants GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 1"
+ },
+ {
+  "id": 80,
+  "lang": "ru",
+  "q": "Какова средняя цена за тонну цемента по регионам?",
+  "type": "num",
+  "gold": "SELECT AVG(unit_price) FROM deals_enriched WHERE tnved_code='252329' AND unit='тонна' AND {A} AND region_uz='Surxondaryo viloyati'"
+ },
+ {
+  "id": 81,
+  "lang": "uz-lat",
+  "q": "Qaysi hafta kuni eng ko'p bitim tuziladi?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE isodow(deal_date)=3"
  }
 ]

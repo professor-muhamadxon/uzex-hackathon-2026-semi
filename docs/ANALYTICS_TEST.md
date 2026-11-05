@@ -77,7 +77,7 @@ Natija / Результат: **20/20**
 - **UZ:** Dollar kursi bashorati noyabr oyi uchun
 - **Kutilgan javob / Ожидаемый ответ:** ⚠️ 2026-11 uchun ma’lumot yo‘qligi aytilishi SHART; taxmin ≈ 13 612.58 so‘m (95% oraliq 13 419.26 – 13 805.9).
 - **Kalit qiymatlar / Ключевые значения:** `13 612.58`, `13 419.26`, `13 805.9`, ⚠️ ogohlantiriş
-- **Agent:** RU: ✅ (0.02 s) · UZ: ✅ (0.02 s)
+- **Agent:** RU: ✅ (0.02 s) · UZ: ✅ (0.01 s)
 
 ## 10. Bitimlar soni bashorati 2027
 

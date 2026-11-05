@@ -12,13 +12,29 @@ from datetime import date
 from .db import fetch_dicts
 from .normalize import match_key
 
-EXTRA_INTENTS = {"usd_rate", "extreme_deal", "distinct_parties", "compare_periods", "status_share", "avg_deal", "contracts_count", "delivery", "analysis", "forecast"}
+EXTRA_INTENTS = {"usd_rate", "extreme_deal", "distinct_parties", "compare_periods", "status_share", "avg_deal", "contracts_count", "delivery", "analysis", "forecast", "breakdown"}
 
 ANNUL = "Аннулирован(Не оплачен)"
 
 
 def _has(t: str, pattern: str) -> bool:
     return re.search(pattern, t) is not None
+
+
+BREAKDOWN_DIMS = [
+    ("weekday", r"(hafta kun\w*|haftaning kun\w*|den nedeli|dn\w+ nedeli|dni nedeli|vix\w*dn\w*|dam olish kun\w*)"),
+    ("region", r"((viloyat|region|hudud)\w* (boyicha|kesimida|bo.?yicha)|po (region|oblast)\w*|v kajdom (region|oblast)\w*|kajdom (region|oblast)\w*|v razreze (region|oblast)\w*)"),
+    ("product", r"((tovar|mahsulot)\w* (turlari |turi )?(boyicha|kesimida)|po tovar\w*|po vidam tovar\w*|v razreze tovar\w*|kajdomu tovaru|kajdyy tovar)"),
+]
+WEEKDAY_UZ = {1: "dushanba", 2: "seshanba", 3: "chorshanba", 4: "payshanba", 5: "juma", 6: "shanba", 7: "yakshanba"}
+WEEKDAY_RU = {1: "понедельник", 2: "вторник", 3: "среда", 4: "четверг", 5: "пятница", 6: "суббота", 7: "воскресенье"}
+
+
+def detect_breakdown_dim(t: str) -> str | None:
+    for dim, pattern in BREAKDOWN_DIMS:
+        if re.search(pattern, t):
+            return dim
+    return None
 
 
 def detect_extra_intent(p, question: str) -> str | None:
@@ -33,6 +49,19 @@ def detect_extra_intent(p, question: str) -> str | None:
     if _has(t, r"\bkurs\w*") and not _has(t, r"\b(summa\w*|summ\w*|bitim\w*|sdel\w*|eksport\w*)"):
         p.extra = {}
         return "usd_rate"
+    dim = detect_breakdown_dim(t)
+    if not dim and _has(t, r"(qaysi (viloyat|region|hudud)\w*|kakoy region|v kakom region|kakih region)") and _has(
+        t, r"(kompaniya|ishtirokchi|qatnashchi|kompani|uchastnik|firm)"
+    ) and not _has(t, r"(kontrakt|bitim|sdelk|summa|sum)"):
+        p.extra = {"dim": "region", "participants": True}
+        return "breakdown"
+    if dim:
+        p.extra = {"dim": dim}
+        if dim == "region" and _has(t, r"(kompaniya|ishtirokchi|qatnashchi|kompani|uchastnik|firm|korxona)") and _has(
+            t, r"(nechta|qancha|soni|skolko|kolichestvo|chislo)"
+        ):
+            p.extra["participants"] = True
+        return "breakdown"
     # share by contract form / type / auction type ("spot va forvard ulushi")
     dims = [
         ("contract_form", r"\b(spot\w*|forvard\w*|forward\w*|fyuchers\w*|fyuchers\w*|forma\w*|form\w* kontrakt\w*)"),
@@ -120,6 +149,8 @@ def run_extra(p, build_where, base_result):
         return _compare(p, build_where, base_result)
     if p.intent == "status_share":
         return _status_share(p, build_where, base_result)
+    if p.intent == "breakdown":
+        return _breakdown(p, build_where, base_result)
     if p.intent == "avg_deal":
         return _avg_deal(p, build_where, base_result)
     if p.intent == "delivery":
@@ -143,6 +174,49 @@ def _delivery(p, build_where, base_result):
     """
     rows = fetch_dicts(sql)
     return base_result(p, "delivery", rows, sql, {})
+
+
+def _breakdown(p, build_where, base_result):
+    """metric x dimension x filters; every figure computed in SQL."""
+    dim = p.extra.get("dim", "region")
+    if p.extra.get("participants"):
+        sql = """SELECT region AS k, NULL AS label, COUNT(*) AS value, COUNT(*) AS deals,
+                        ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) AS share_pct
+                 FROM participants GROUP BY 1 ORDER BY value DESC"""
+        return base_result(p, "breakdown", fetch_dicts(sql), sql, {"dim": "region", "metric": "participants", "note": "", "unit": None})
+    metric, note = p.metric, ""
+    where = build_where(p)
+    if dim == "weekday":
+        key, label, limit = "isodow(deal_date)", "NULL", 7
+    elif dim == "product":
+        key, label, limit = "tnved_code", "any_value(contract_product_name)", 20
+    else:
+        key, label, limit = "region_uz", "NULL", 20
+    if metric == "usd":
+        metric = "amount"
+    if metric in {"volume", "avg_price"}:
+        unit_rows = fetch_dicts(f"SELECT unit FROM deals_enriched WHERE {where} GROUP BY 1 ORDER BY COUNT(*) DESC LIMIT 2")
+        if not p.product.tnveds or not unit_rows:
+            note = "unit_mix"
+            metric = "amount"
+        else:
+            unit = unit_rows[0]["unit"]
+            where += " AND unit = '" + unit.replace("'", "''") + "'"
+            if len(unit_rows) > 1:
+                note = "unit_chosen"
+            p.extra["unit"] = unit
+    expr = {
+        "count": "COUNT(*)", "amount": "SUM(amount_uzs)", "volume": "SUM(volume)", "avg_price": "AVG(unit_price)",
+    }.get(metric, "SUM(amount_uzs)")
+    share = metric in {"count", "amount", "volume"}
+    sql = f"""
+        SELECT {key} AS k, {label} AS label, {expr} AS value, COUNT(*) AS deals,
+               {"ROUND(100.0 * " + expr + " / SUM(" + expr + ") OVER (), 2)" if share else "NULL"} AS share_pct
+        FROM deals_enriched WHERE {where}
+        GROUP BY 1 ORDER BY {"1" if dim == "weekday" else "value DESC NULLS LAST"} LIMIT {limit}
+    """
+    rows = fetch_dicts(sql)
+    return base_result(p, "breakdown", rows, sql, {"dim": dim, "metric": metric, "note": note, "unit": p.extra.get("unit")})
 
 
 def _avg_deal(p, build_where, base_result):
@@ -456,6 +530,38 @@ def format_extra(result, p, fmt_num, fmt_money, fmt_date) -> str:
         return (f"Средняя сумма одной сделки: {fmt_money(r['avg_uzs'], p.lang)} "
                 f"(медиана {fmt_money(r['median_uzs'], p.lang)}, min {fmt_num(r['min_uzs'])}, max {fmt_num(r['max_uzs'])}; "
                 f"{fmt_num(r['deals'])} сделок).")
+
+    if result.intent == "breakdown":
+        dim, metric, note, unit = (result.meta.get(k) for k in ("dim", "metric", "note", "unit"))
+        names = {"weekday": ("hafta kunlari", "дням недели"), "region": ("viloyatlar", "регионам"), "product": ("tovarlar", "товарам")}[dim]
+        mname = {"count": ("bitimlar soni", "количество сделок"), "amount": ("summa (so‘m)", "сумма (сум)"),
+                 "volume": ("hajm", "объём"), "avg_price": ("o‘rtacha narx", "средняя цена"),
+                 "participants": ("kompaniyalar soni (ishtirokchilar reyestri)", "количество компаний (реестр участников)")}[metric]
+        lines = [(f"{names[0].capitalize()} bo‘yicha: {mname[0]}" if uz else f"По {names[1]}: {mname[1]}") + (f", {unit}" if unit else "") + ":"]
+        if dim == "weekday":
+            have = {int(r["k"]): r for r in rows}
+            rows = [have.get(d, {"k": d, "label": None, "value": 0, "deals": 0, "share_pct": 0 if metric in {"count", "amount", "volume"} else None}) for d in range(1, 8)]
+        for r in rows:
+            k = r["k"]
+            if dim == "weekday":
+                k = (WEEKDAY_UZ if uz else WEEKDAY_RU)[int(k)]
+            elif dim == "product":
+                k = f"{r['label']} ({k})"
+            val = fmt_num(r["value"]) if metric != "amount" else fmt_money(r["value"], p.lang)
+            if metric in {"count", "participants"}:
+                val += " ta" if uz else ""
+            sh = f" — {fmt_num(r['share_pct'])}%" if r.get("share_pct") is not None else ""
+            lines.append(f"• {k}: {val}{sh}")
+        if note == "unit_mix":
+            lines.append("Eslatma: turli o‘lchov birliklari qo‘shilmaydi, shuning uchun summa bo‘yicha ko‘rsatildi." if uz
+                         else "Примечание: разные единицы измерения нельзя складывать, поэтому показана сумма.")
+        if note == "unit_chosen":
+            lines.append(f"Eslatma: tovar bir necha birlikda sotiladi; eng ko‘p uchraydigan birlik ({unit}) olindi." if uz
+                         else f"Примечание: товар продаётся в нескольких единицах; взята самая частая ({unit}).")
+        if dim == "weekday" and not any(r["value"] for r in rows if int(r["k"]) in (6, 7)):
+            lines.append("Shanba va yakshanba kunlari bitim tuzilmagan (ma’lumotlarda 0)." if uz
+                         else "В субботу и воскресенье сделок нет (в данных 0).")
+        return "\n".join(lines)
 
     if result.intent == "delivery":
         lines = ["Yetkazib berish (lotlarda):" if uz else "Поставка (в лотах):"]

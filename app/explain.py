@@ -76,6 +76,9 @@ def explain(result, p) -> str:
                 "95% oraliq = ±1.96 × qoldiqlar standart og‘ishi. Bu taxmin, haqiqiy ma’lumot emas"
                 if uz else "по последним 12 месяцам построена линейная регрессия (y = a + b·месяц) и продолжена вперёд; "
                 "95% интервал = ±1.96 × стандартное отклонение остатков. Это оценка, а не фактические данные")
+    elif intent == "breakdown":
+        text = ("bitimlar tanlangan kesim bo‘yicha guruhlandi va ko‘rsatkich har guruh uchun SQL'da hisoblandi; ulush = guruh ÷ jami × 100"
+                if uz else "сделки сгруппированы по выбранному срезу, показатель посчитан в SQL для каждой группы; доля = группа ÷ итого × 100")
     elif intent == "delivery":
         text = ("«Поставлено» ustuni bo‘yicha: yetkazilmagan = sotilgan lotlar − yetkazilgan lotlar (to‘langan va ijro etilgan bitimlar)"
                 if uz else "по полю «Поставлено»: недопоставлено = куплено лотов − поставлено лотов (оплаченные и исполненные сделки)")

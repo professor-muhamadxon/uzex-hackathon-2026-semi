@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 
 from .db import fetch_dicts
 from .formatter import format_result
+from .semantic import semantic_parse
+from .config import LLM_ENABLED, LLM_SQL
 from .localize import localizable_values, localize
 from .script import render
 from .llm import generate_sql
@@ -64,6 +66,14 @@ class Agent:
 
         parsed = parse_question(question)
 
+        # Small-LLM meaning layer (optional): only for questions the rules could not classify.
+        if parsed.intent == "unknown" and not parsed.not_found_reason and self.llm_enabled and LLM_ENABLED:
+            verdict = semantic_parse(question, parsed)
+            if verdict is False:
+                return AgentResponse(
+                    answer=self._unsupported_answer(parsed.lang), intent="unsupported", lang=parsed.lang, parsed=parsed
+                )
+
         if parsed.not_found_reason:
             return AgentResponse(
                 answer=self._not_found_answer(parsed),
@@ -99,7 +109,7 @@ class Agent:
                 rows=result.rows,
             )
 
-        if self.llm_enabled:
+        if self.llm_enabled and LLM_SQL:
             result = self._llm_query(question, parsed)
             if result is not None:
                 answer = format_result(result, parsed)
@@ -117,15 +127,29 @@ class Agent:
 
         if parsed.lang == "ru":
             answer = (
-                "Не удалось однозначно определить вопрос по шаблонам. "
-                "Уточните, пожалуйста: период, товар, компанию, регион или номер контракта."
+                "Не удалось уверенно сопоставить вопрос с доступными расчётами, поэтому я не буду гадать. "
+                "Доступно: суммы, количество и объём сделок, цены, топ компаний/товаров/регионов/брокеров, "
+                "разрезы по регионам, товарам и дням недели, доли, курс доллара, анализ и прогноз. "
+                "Переформулируйте вопрос, указав показатель и период."
             )
         else:
             answer = (
-                "Savolni aniq tushunmadim. Iltimos, davr, tovar, kompaniya, region "
-                "yoki kontrakt raqamini aniqlashtiring."
+                "Savolni mavjud hisoblar bilan ishonchli moslab bo‘lmadi, shuning uchun taxmin qilmayman. "
+                "Mavjud: bitimlar summasi, soni, hajmi, narx, kompaniya/tovar/viloyat/broker reytingi, "
+                "viloyat, tovar va hafta kunlari kesimi, ulushlar, dollar kursi, tahlil va bashorat. "
+                "Savolni ko‘rsatkich va davr bilan aniqroq yozing."
             )
         return AgentResponse(answer=answer, intent="unknown", lang=parsed.lang, parsed=parsed)
+
+    @staticmethod
+    def _unsupported_answer(lang: str) -> str:
+        if lang == "ru":
+            return ("Такой показатель или расчёт в данных и в доступных расчётах отсутствует "
+                    "(например, маржа, прибыль, сроки поставки). Доступны суммы, количество, объёмы, цены, "
+                    "рейтинги, разрезы, доли, курс доллара, анализ и прогноз.")
+        return ("Bunday ko‘rsatkich yoki hisob ma’lumotlarda va mavjud hisoblarda yo‘q "
+                "(masalan, marja, foyda, yetkazish muddati). Mavjud: summa, soni, hajm, narx, reyting, kesimlar, "
+                "ulushlar, dollar kursi, tahlil va bashorat.")
 
     @staticmethod
     def _error_answer(lang: str) -> str:

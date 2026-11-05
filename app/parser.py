@@ -382,7 +382,7 @@ def _find_metric(text: str, question: str, product: ProductFilter) -> str:
         "how many",
         "number of deals",
     ]
-    volume_words = ["tonna", "тонн", "kg", "кг", "kilogram", "килограмм", "dona", "дона", "штук", "litr", "литр", "metr", "метр", "hajm", "объем", "miqdor"]
+    volume_words = ["tonna", "тонн", "kg", "кг", "kilogram", "килограмм", "dona", "дона", "штук", "litr", "литр", "metr", "метр", "hajm", "xajm", "хажм", "объем", "miqdor"]
     price_words = ["narx", "нарх", "цена", "price", "средняя цена"]
 
     if _has_any(text, ["dollar", "доллар", "usd"]):
@@ -525,10 +525,9 @@ def _entity_missing(question: str, company) -> bool:
         "sotgan", "sotilgan", "haqida", "boyicha",
     }
     match = re.search(
-        r"(?:компания|компании|company|фирма|korxona|kompaniya)\s+"
+        r"(?i:компания|компании|company|фирма|korxona|kompaniya)\s+"
         r"([A-ZА-ЯЎҚҒҲ0-9][\w‘'’-]*(?:\s+[A-ZА-ЯЎҚҒҲ0-9][\w‘'’-]*)*)",
         question,
-        re.IGNORECASE,
     )
     if match and match.group(1).lower().split()[0] not in generic:
         return True

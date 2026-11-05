@@ -42,7 +42,7 @@ def _product_condition(p: ParsedQuery) -> str | None:
 
 
 ANNUL_STATUS = "Аннулирован(Не оплачен)"
-SUM_INTENTS = {"total", "product_stats", "company_profile", "export_stats", "region_stats", "top", "broker_stats"}
+SUM_INTENTS = {"total", "product_stats", "company_profile", "export_stats", "region_stats", "top", "broker_stats", "breakdown"}
 
 
 def excludes_annulled(p: ParsedQuery) -> bool:
