@@ -66,6 +66,16 @@ def explain(result, p) -> str:
         else:
             text = ("bitimlar sana va vaqt bo‘yicha saralanib, birinchisi olindi"
                     if uz else "сделки отсортированы по дате и времени, взята первая")
+    elif intent == "analysis":
+        text = ("ma’lumotlar oylar bo‘yicha jamlandi; boshlang‘ich/oxirgi qiymat, min/max, o‘rtacha, tebranish, yillar bo‘yicha o‘zgarish va "
+                "chiziqli trend (regressiya qiyaligi, R²) SQL’da hisoblandi"
+                if uz else "данные агрегированы по месяцам; начало/конец, min/max, среднее, колеблемость, изменения по годам и "
+                "линейный тренд (наклон регрессии, R²) вычислены в SQL")
+    elif intent == "forecast":
+        text = ("so‘nggi 12 oylik qiymatlarga chiziqli regressiya (y = a + b·oy) moslandi va keyingi oylarga davom ettirildi; "
+                "95% oraliq = ±1.96 × qoldiqlar standart og‘ishi. Bu taxmin, haqiqiy ma’lumot emas"
+                if uz else "по последним 12 месяцам построена линейная регрессия (y = a + b·месяц) и продолжена вперёд; "
+                "95% интервал = ±1.96 × стандартное отклонение остатков. Это оценка, а не фактические данные")
     elif intent == "delivery":
         text = ("«Поставлено» ustuni bo‘yicha: yetkazilmagan = sotilgan lotlar − yetkazilgan lotlar (to‘langan va ijro etilgan bitimlar)"
                 if uz else "по полю «Поставлено»: недопоставлено = куплено лотов − поставлено лотов (оплаченные и исполненные сделки)")

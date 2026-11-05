@@ -31,6 +31,8 @@ EXAMPLES = [
     "Ötgan oyda eksport qança dollar?",
     "Ўтган йили энг кўп пахта сотган 3 та компания",
     "Топ-5 компаний по сумме сделок в 2024 году",
+    "Barcha davr bo‘yicha dollar kursini tahlil qil",
+    "Прогноз курса доллара на 2027 год",
 ]
 
 CREDIT_UZ = "Qöqon universiteti Andijon filiali (KUAF) iştirokçilari tomonidan tayyorlandi."
@@ -73,7 +75,9 @@ HELP = (
     "• 100001-kontrakt haqida maʼlumot\n"
     "• Аннулированные сделки за 2025 год\n"
     "• Средняя цена хлопка за последние 3 месяца\n"
-    "• Курс доллара на 01.06.2024\n\n"
+    "• Курс доллара на 01.06.2024\n"
+    "• Barcha davr bo‘yicha dollar kursini tahlil qil\n"
+    "• Прогноз курса доллара на 2027 год (статистическая оценка)\n\n"
     "Javob ostidagi «SQL» tugmasi bajarilgan sörovni körsatadi.\n"
     "Кнопка «SQL» под ответом показывает выполненный запрос.\n\n"
     + CREDIT_UZ + "\n" + CREDIT_RU

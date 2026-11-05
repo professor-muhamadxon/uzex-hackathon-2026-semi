@@ -116,7 +116,7 @@ def render(text: str, script: str, protect: Iterable[Any] = (), skip: Iterable[s
         if value in text:
             text = text.replace(value, mask(value))
     # codes / technical tokens: INN-like numbers, BK001, SQL-ish uppercase words in Cyrillic
-    text = re.sub(r"\bBK\d{3}\b", lambda m: mask(m.group(0)), text)
+    text = re.sub(r"\bBK\d{3}\b|\bUSD\b|\bSQL\b|R²|\bTN VED\b", lambda m: mask(m.group(0)), text)
     text = re.sub(r"[«\"“][^»\"”\x00]{1,80}[»\"”]", lambda m: mask(m.group(0)), text)
 
     converted = latin_to_cyrillic(text) if script == "cyr" else legacy_to_new(text)

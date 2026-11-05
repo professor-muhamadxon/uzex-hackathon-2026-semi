@@ -40,7 +40,7 @@ class Agent:
         parsed = response.parsed
         if response.protect and parsed is not None:
             sources = [*response.protect, response.filters, parsed.question,
-                       parsed.date_from, parsed.date_to, DATA_START, DATA_END, 100]
+                       parsed.date_from, parsed.date_to, DATA_START, DATA_END, 100, 1.96, 95, 12]
             bad = unverified_numbers(response.answer, sources)
             response.unverified = bad
             if bad:
@@ -138,14 +138,28 @@ class Agent:
         reason = parsed.not_found_reason
         if reason == "period":
             if lang == "ru":
-                return (
+                future = (parsed.year_from or 0) > DATA_END.year or (
+                    parsed.year_from == DATA_END.year and (parsed.month or 0) > DATA_END.month
+                ) or (parsed.date_to is not None and parsed.date_to > DATA_END)
+                text = (
                     "В данных нет информации за запрошенный период. "
                     "Данные охватывают 03.01.2022 – 30.10.2026."
                 )
-            return (
+                if future:
+                    text += (" Если нужна статистическая оценка на будущее, спросите «прогноз …» "
+                             "(например: «прогноз курса доллара на 2027 год»).")
+                return text
+            future = (parsed.year_from or 0) > DATA_END.year or (
+                parsed.year_from == DATA_END.year and (parsed.month or 0) > DATA_END.month
+            ) or (parsed.date_to is not None and parsed.date_to > DATA_END)
+            text = (
                 "So‘ralgan davr bo‘yicha ma’lumot topilmadi. "
                 "Ma’lumotlar 03.01.2022 – 30.10.2026 oralig‘ini qamraydi."
             )
+            if future:
+                text += (" Kelajak uchun statistik taxmin kerak bo‘lsa, «… bashorat qil» deb so‘rang "
+                         "(masalan: «2027-yil uchun dollar kursini bashorat qil»).")
+            return text
         if reason == "entity":
             name = parsed.not_found_detail
             if lang == "ru":

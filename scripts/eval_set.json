@@ -421,5 +421,54 @@
   "q": "Какой процент сделок аннулирован в 2024 году?",
   "type": "contains",
   "gold": "SELECT CAST(ROUND(100.0*COUNT(*) FILTER (WHERE status='Аннулирован(Не оплачен)')/COUNT(*),2) AS VARCHAR) FROM deals_enriched WHERE year(deal_date)=2024"
+ },
+ {
+  "id": 63,
+  "lang": "uz-lat",
+  "q": "Barcha davr bo'yicha dollar kursini analiz qil",
+  "type": "num",
+  "gold": "SELECT MAX(rate) FROM usd_rates"
+ },
+ {
+  "id": 64,
+  "lang": "ru",
+  "q": "Анализ курса доллара за 2025 год",
+  "type": "num",
+  "gold": "SELECT MIN(rate) FROM usd_rates WHERE year(rate_date)=2025"
+ },
+ {
+  "id": 65,
+  "lang": "uz-lat",
+  "q": "2025-yil bitimlar tahlili",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE year(deal_date)=2025 AND {A}"
+ },
+ {
+  "id": 66,
+  "lang": "ru",
+  "q": "Аналитика по количеству сделок",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE year(deal_date)=2024"
+ },
+ {
+  "id": 67,
+  "lang": "uz-lat",
+  "q": "2027-yil uchun dollar kursini bashorat qil",
+  "type": "contains",
+  "gold": "SELECT 'uchun ma’lumotlar berilmagan'"
+ },
+ {
+  "id": 68,
+  "lang": "ru",
+  "q": "Прогноз суммы сделок на следующие 3 месяца",
+  "type": "contains",
+  "gold": "SELECT 'данных за 2026-11 – 2027-01 нет'"
+ },
+ {
+  "id": 69,
+  "lang": "uz-cyr",
+  "q": "Ўтган йилги доллар курсини таҳлил қил",
+  "type": "num",
+  "gold": "SELECT MAX(rate) FROM usd_rates WHERE year(rate_date)=2025"
  }
 ]

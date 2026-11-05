@@ -12,7 +12,7 @@ from datetime import date
 from .db import fetch_dicts
 from .normalize import match_key
 
-EXTRA_INTENTS = {"usd_rate", "extreme_deal", "distinct_parties", "compare_periods", "status_share", "avg_deal", "contracts_count", "delivery"}
+EXTRA_INTENTS = {"usd_rate", "extreme_deal", "distinct_parties", "compare_periods", "status_share", "avg_deal", "contracts_count", "delivery", "analysis", "forecast"}
 
 ANNUL = "Аннулирован(Не оплачен)"
 
@@ -25,6 +25,11 @@ def detect_extra_intent(p, question: str) -> str | None:
     t = match_key(question)
     if p.contract_id is not None or p.deal_id is not None:
         return None
+    from .analytics import detect_analytics
+
+    analytic = detect_analytics(p, question)
+    if analytic:
+        return analytic
     if _has(t, r"\bkurs\w*") and not _has(t, r"\b(summa\w*|summ\w*|bitim\w*|sdel\w*|eksport\w*)"):
         p.extra = {}
         return "usd_rate"
@@ -101,6 +106,10 @@ def detect_extra_intent(p, question: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 def run_extra(p, build_where, base_result):
+    if p.intent in {"analysis", "forecast"}:
+        from .analytics import run_analytics
+
+        return run_analytics(p, build_where, base_result)
     if p.intent == "usd_rate":
         return _usd_rate(p, base_result)
     if p.intent == "extreme_deal":
@@ -323,6 +332,10 @@ def _status_share(p, build_where, base_result):
 # ---------------------------------------------------------------------------
 
 def format_extra(result, p, fmt_num, fmt_money, fmt_date) -> str:
+    if result.intent in {"analysis", "forecast"}:
+        from .analytics import format_analytics
+
+        return format_analytics(result, p, fmt_num, fmt_money, fmt_date)
     uz = p.lang == "uz"
     rows = result.rows
     if result.intent == "usd_rate":

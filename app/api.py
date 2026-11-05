@@ -70,7 +70,7 @@ PAGE = """<!doctype html>
 <script>
 const EX=["2025-yilda jami savdo summasi qancha?","Ötgan oyda eksport qança dollar?","Ўтган йили энг кўп пахта сотган 3 та компания",
 "Топ-5 компаний по сумме сделок в 2024 году","Экспорт в прошлом квартале в долларах",
-"Средняя цена хлопка за последние 3 месяца","100001-kontrakt haqida ma’lumot"];
+"Средняя цена хлопка за последние 3 месяца","100001-kontrakt haqida ma’lumot","Barcha davr bo‘yicha dollar kursini tahlil qil","Прогноз курса доллара на 2027 год"];
 const ex=document.getElementById('ex');
 EX.forEach(t=>{const s=document.createElement('span');s.textContent=t;s.onclick=()=>{q.value=t;go()};ex.appendChild(s)});
 const f=document.getElementById('f'),q=document.getElementById('q'),b=document.getElementById('b'),out=document.getElementById('out');
