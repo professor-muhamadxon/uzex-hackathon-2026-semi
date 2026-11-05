@@ -470,5 +470,45 @@
   "q": "Ўтган йилги доллар курсини таҳлил қил",
   "type": "num",
   "gold": "SELECT MAX(rate) FROM usd_rates WHERE year(rate_date)=2025"
+ },
+ {
+  "id": 70,
+  "lang": "uz-lat",
+  "q": "binzin butun davr boyicha necha foizda oshgan?",
+  "type": "contains",
+  "gold": "SELECT CAST(ROUND(100.0*(l-f)/f,2) AS VARCHAR) FROM (SELECT arg_min(v,m) f, arg_max(v,m) l FROM (SELECT date_trunc('month',deal_date) m, AVG(unit_price) FILTER (WHERE status<>'Аннулирован(Не оплачен)') v FROM deals_enriched WHERE tnved_code='271012' AND unit='тонна' GROUP BY 1))"
+ },
+ {
+  "id": 71,
+  "lang": "uz-lat",
+  "q": "benzin butun davr boyicha necha foizda oshgan?",
+  "type": "contains",
+  "gold": "SELECT CAST(ROUND(100.0*(l-f)/f,2) AS VARCHAR) FROM (SELECT arg_min(v,m) f, arg_max(v,m) l FROM (SELECT date_trunc('month',deal_date) m, AVG(unit_price) FILTER (WHERE status<>'Аннулирован(Не оплачен)') v FROM deals_enriched WHERE tnved_code='271012' AND unit='тонна' GROUP BY 1))"
+ },
+ {
+  "id": 72,
+  "lang": "ru",
+  "q": "Цена бинзина выросла на сколько процентов",
+  "type": "contains",
+  "gold": "SELECT CAST(ROUND(100.0*(l-f)/f,2) AS VARCHAR) FROM (SELECT arg_min(v,m) f, arg_max(v,m) l FROM (SELECT date_trunc('month',deal_date) m, AVG(unit_price) FILTER (WHERE status<>'Аннулирован(Не оплачен)') v FROM deals_enriched WHERE tnved_code='271012' AND unit='тонна' GROUP BY 1))"
+ },
+ {
+  "id": 73,
+  "lang": "ru",
+  "q": "На сколько процентов вырос курс доллара за весь период?",
+  "type": "contains",
+  "gold": "SELECT CAST(ROUND(100.0*(arg_max(rate,rate_date)-arg_min(rate,rate_date))/arg_min(rate,rate_date),2) AS VARCHAR) FROM usd_rates"
+ },
+ {
+  "id": 74,
+  "lang": "uz-lat",
+  "q": "kompyuter butun davr boyicha necha foizda oshgan?",
+  "type": "not_found"
+ },
+ {
+  "id": 75,
+  "lang": "ru",
+  "q": "Компьютер на сколько процентов подорожал за весь период?",
+  "type": "not_found"
  }
 ]

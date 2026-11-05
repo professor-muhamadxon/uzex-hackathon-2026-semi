@@ -121,6 +121,12 @@ def _sources_line(sources: list[str], lang: str) -> str:
 
 def _append_footer(text: str, result: QueryResult, p: ParsedQuery) -> str:
     parts = [text.strip()]
+    for typed, understood in p.product.corrections:
+        parts.append(
+            f"ℹ️ «{typed}» so‘zi «{understood}» (eng yaqin tovar nomi) deb tushunildi. Boshqa tovar nazarda tutilgan bo‘lsa, nomini aniq yozing."
+            if p.lang == "uz" else
+            f"ℹ️ «{typed}» понято как «{understood}» (ближайшее название товара). Если имелся в виду другой товар — уточните название."
+        )
     annulled = result.meta.get("annulled") if result.meta else None
     if annulled:
         if p.lang == "uz":

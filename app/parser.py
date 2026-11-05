@@ -615,6 +615,9 @@ def parse_question(question: str) -> ParsedQuery:
     parsed.company, parsed.company_score = find_company(question)
     parsed.company_role = _find_role(text)
     parsed.product = find_product_filters(question)
+    if parsed.product.ambiguous:
+        parsed.not_found_reason = parsed.not_found_reason or "product"
+        parsed.not_found_detail = parsed.not_found_detail or parsed.product.ambiguous
     parsed.regions, parsed.region_label = find_regions(question)
     parsed.broker, parsed.broker_score = find_broker(question)
 

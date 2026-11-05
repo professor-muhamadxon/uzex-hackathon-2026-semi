@@ -18,6 +18,8 @@ ANNUL = "Аннулирован(Не оплачен)"
 MAX_HORIZON = 38  # months after 2026-10 (up to Dec 2029)
 
 ANALYSIS_RE = r"\b(proanaliz\w*|tahlil\w*|taxlil\w*|analiz\w*|analit\w*|tendents\w*|trend\w*|obzor\w*|dinamik\w*|sharh\w*)"
+GROWTH_RE = r"\b(osh\w*|osgan|osdi|ortgan|kopaygan|kamaygan|kamay\w*|tushgan|pasaygan|arzonlash\w*|qimmatlash\w*|viros\w*|ros\w*l\w*|rost\w*|uvelich\w*|snizil\w*|snijen\w*|podorojal\w*|podeshevel\w*|izmenil\w*|ozgargan|ozgardi|vozros\w*)"
+PERCENT_RE = r"(foiz\w*|protsent\w*|procent\w*|%)"
 FORECAST_RE = r"\b(bashorat\w*|prognoz\w*|prognos\w*|forecast\w*|predict\w*|predskaz\w*|oldindan ayt\w*)"
 
 
@@ -59,6 +61,38 @@ def _forecast_target(question: str, t: str) -> tuple[int, str]:
     return 3, "+3"
 
 
+GENERIC_WORDS = {
+    "butun", "davr", "davrda", "davrida", "boyicha", "necha", "foizda", "foizga", "foiz", "oshgan", "osgan",
+    "kamaygan", "tushgan", "bitim", "bitimlar", "bitimlarning", "summa", "summasi", "narxi", "narx", "hajmi",
+    "hajm", "soni", "qancha", "dollar", "dollarning", "kursi", "kurs", "birja", "birjada", "jami", "yilda",
+    "yildan", "oyda", "oldingi", "otgan", "keyingi", "ozgargan", "ozgardi", "ortgan", "kopaygan", "tahlil",
+    "naskolko", "skolko", "protsentov", "protsenta", "procentov", "virosla", "virosli", "vyrosla", "vyros",
+    "cena", "tsena", "tsenyi", "summa", "sdelok", "sdelki", "sdelka", "ves", "period", "goda", "god", "godu",
+    "snizilas", "snizilsya", "uvelichilas", "uvelichilis", "izmenilas", "kurs", "kursa", "doll", "dollara",
+    "dollarov", "obem", "obema", "kolichestvo", "proizoshlo", "bolee", "bolshe", "kazhdyy", "mesyats",
+    "kvartal", "chorak", "ozbekiston", "narxlar", "narxlari", "sotuv", "sotuvlar", "savdo", "savdosi",
+}
+
+
+def _unknown_subject_word(p, t: str) -> str:
+    if p.product.tnveds or p.product.categories or p.company or p.regions or p.broker:
+        return ""
+    from .parser import MONTHS  # local import: avoid circular import at module load
+
+    known = set(GENERIC_WORDS)
+    for names in MONTHS.values():
+        known.update(match_key(n) for n in names)
+    for tok in t.split():
+        if len(tok) < 6 or tok.isdigit() or tok in known:
+            continue
+        if re.search(GROWTH_RE, tok) or re.search(PERCENT_RE, tok) or re.search(ANALYSIS_RE, tok):
+            continue
+        if re.match(r"^(osh|ros|vir|viros|uvel|sniz|kopay|kamay|ozgar|izmen|bitim|sdel|dollar|kurs|summ|period|davr)", tok):
+            continue
+        return tok
+    return ""
+
+
 def detect_analytics(p, question: str) -> str | None:
     t = match_key(question)
     if _has(t, FORECAST_RE):
@@ -71,6 +105,18 @@ def detect_analytics(p, question: str) -> str | None:
         p.month = None
         p.date_from = p.date_to = None
         return "forecast"
+    if _has(t, GROWTH_RE) and _has(t, PERCENT_RE):
+        subject = _subject(p, t)
+        if subject == "deals" and p.product.tnveds and not _has(t, r"\b(summa\w*|sum|obem\w*|hajm\w*)"):
+            subject = "price"  # "benzin necha foizda oshgan" -> price growth
+        p.extra = {"subject": subject, "growth": True}
+        unknown = _unknown_subject_word(p, t)
+        if unknown and not p.not_found_reason:
+            # a noun that is neither a known product/company/region nor a generic question word:
+            # say "not found" instead of silently answering for the whole exchange
+            p.not_found_reason = "product_unknown"
+            p.not_found_detail = unknown
+        return "analysis"
     if _has(t, ANALYSIS_RE):
         p.extra = {"subject": _subject(p, t)}
         return "analysis"
@@ -143,6 +189,7 @@ def run_analytics(p, build_where, base_result):
 
 
 def _analysis(p, series: str, meta: dict, subject: str, base_result):
+    meta["growth"] = bool(p.extra.get("growth"))
     agg = "AVG(v)" if subject in {"usd", "price"} else "SUM(v)"
     sql = f"""
         WITH s AS ({series}), t AS (SELECT m, v, ROW_NUMBER() OVER (ORDER BY m) AS i FROM s WHERE v IS NOT NULL)
@@ -355,9 +402,31 @@ def format_analytics(result, p, fmt_num, fmt_money, fmt_date) -> str:
         return "Tahlil uchun ma’lumot topilmadi." if uz else "Данных для анализа не найдено."
     r = rows[0]
     trend = _trend_word(r.get("slope_pct"), r.get("r2"), uz)
+    head: list[str] = []
+    if meta.get("growth"):
+        if subject == "usd":
+            d0 = meta.get("daily") or {}
+            first_v, last_v, pct = d0.get("first_rate"), d0.get("last_rate"), d0.get("total_pct")
+            span = f"{fmt_date(d0.get('d_from'))} – {fmt_date(d0.get('d_to'))}"
+        else:
+            first_v, last_v, pct = r.get("first_v"), r.get("last_v"), r.get("change_pct")
+            span = f"{r['first_m']} – {r['last_m']}"
+        word = ("oshgan" if (pct or 0) >= 0 else "kamaygan") if uz else ("вырос" if (pct or 0) >= 0 else "снизился")
+        sign = "+" if (pct or 0) >= 0 else ""
+        what = SUBJ_UZ[subject] if uz else SUBJ_RU[subject]
+        basis = "birinchi va oxirgi oy qiymatlari" if uz else "значения первого и последнего месяца"
+        if subject == "usd":
+            what = "USD kursi" if uz else "курс USD"
+            basis = "birinchi va oxirgi kun kurslari" if uz else "курсы первого и последнего дня"
+        head.append(
+            f"Javob: {what} {span} davrida {sign}{fmt_num(pct)}% ga {word} ({V(first_v)} → {V(last_v)}; {basis} solishtirildi)."
+            if uz else
+            f"Ответ: {what} за {span}: {sign}{fmt_num(pct)}% ({V(first_v)} → {V(last_v)}; сравниваются {basis})."
+        )
+        head.append("")
     slope = r.get("slope")
     sign = "+" if (slope or 0) >= 0 else ""
-    lines: list[str] = []
+    lines: list[str] = list(head)
     if subject == "usd":
         d = meta.get("daily") or {}
         if uz:

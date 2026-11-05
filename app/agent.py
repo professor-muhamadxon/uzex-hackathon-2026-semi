@@ -173,6 +173,20 @@ class Agent:
                 f"{who} ma’lumotlarda (birja qatnashchilari va bitimlari) topilmadi. "
                 "Aniq nomini yoki 9 xonali INNni ko‘rsating."
             )
+        if reason == "product_unknown":
+            word = parsed.not_found_detail
+            if lang == "ru":
+                return (f"Товар или показатель «{word}» в данных не найден. "
+                        "В данных есть сделки биржи: суммы, количества, объёмы, цены и курс доллара.")
+            return (f"«{word}» tovari yoki ko‘rsatkichi ma’lumotlarda topilmadi. "
+                    "Ma’lumotlarda birja bitimlari bor: summa, soni, hajm, narx va dollar kursi.")
+        if reason == "product":
+            word = parsed.not_found_detail
+            if lang == "ru":
+                return (f"Слово «{word}» не удалось уверенно сопоставить с товаром из данных "
+                        "(подходит несколько вариантов). Уточните название товара.")
+            return (f"«{word}» so‘zini ma’lumotlardagi bitta tovarga aniq moslab bo‘lmadi "
+                    "(bir nechta variant mos keladi). Tovar nomini aniqroq yozing.")
         if reason == "field":
             detail = f" ({parsed.not_found_detail})" if parsed.not_found_detail else ""
             if lang == "ru":

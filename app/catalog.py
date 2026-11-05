@@ -112,6 +112,8 @@ class ProductFilter:
     categories: list[str] = field(default_factory=list)
     names: list[str] = field(default_factory=list)
     label: str = ""
+    corrections: list[tuple[str, str]] = field(default_factory=list)  # (typed word, understood keyword)
+    ambiguous: str = ""  # typed word that matches several products equally well
 
 
 @dataclass
@@ -325,6 +327,42 @@ def find_broker(question: str, threshold: int = 86) -> tuple[Broker | None, int]
     return best, best_score
 
 
+FUZZY_STOP = {
+    "butun", "davr", "boyicha", "necha", "foizda", "foizga", "oshgan", "osgan", "kamaygan", "tushgan",
+    "narxi", "narx", "qancha", "nechta", "sotilgan", "sotgan", "bitim", "bitimlar", "summa", "summasi",
+    "tahlil", "analiz", "bashorat", "kompaniya", "viloyat", "viloyatida", "hajmi", "tovar", "mahsulot",
+    "jami", "yilda", "oyda", "ortacha", "eksport", "import", "dinamika", "dinamikasi", "kursi",
+}
+
+
+def _fuzzy_products(text: str, result: ProductFilter, catalog) -> None:
+    candidates = [(kw, tnved) for tnved, kws in PRODUCT_KEYWORDS.items() for kw in kws]
+    keys = [(match_key(kw), kw, tnved) for kw, tnved in candidates if len(match_key(kw)) >= 5 and " " not in match_key(kw)]
+    for token in text.split():
+        if len(token) < 5 or token in FUZZY_STOP or token.isdigit():
+            continue
+        scored: dict[str, tuple[float, str]] = {}
+        for key, kw, tnved in keys:
+            if key[0] != token[0] or abs(len(key) - len(token)) > 2:
+                continue
+            # also compare the token's stem (inflected forms: "binzina", "бинзина")
+            score = max(fuzz.ratio(token, key), fuzz.ratio(token[: len(key)], key))
+            if score >= 80 and (tnved not in scored or score > scored[tnved][0]):
+                scored[tnved] = (score, kw)
+        if not scored:
+            continue
+        ranked = sorted(scored.items(), key=lambda kv: -kv[1][0])
+        if len(ranked) > 1 and ranked[0][1][0] - ranked[1][1][0] < 4:
+            result.ambiguous = token
+            return
+        tnved, (score, kw) = ranked[0]
+        result.tnveds.append(tnved)
+        result.corrections.append((token, match_key(kw)))
+        product = next((pr for pr in catalog.products if pr.tnved == tnved), None)
+        result.label = product.name if product else tnved
+        return
+
+
 def find_product_filters(question: str) -> ProductFilter:
     """Resolve product concepts from the question using keywords and fuzzy names."""
     catalog = get_catalog()
@@ -349,6 +387,12 @@ def find_product_filters(question: str) -> ProductFilter:
                 if not result.label:
                     result.label = category
                 break
+
+    # Typo tolerance: a misspelled product word ("binzin" -> "benzin") is matched to the
+    # nearest keyword. Close enough -> answer for that product (and say so); a tie between
+    # different products or a weak match -> no product is assumed.
+    if not result.tnveds and not result.categories:
+        _fuzzy_products(text, result, catalog)
 
     # Fuzzy product-name match (only if nothing was found by keywords).
     if not result.tnveds and not result.categories:

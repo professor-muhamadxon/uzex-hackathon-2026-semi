@@ -21,7 +21,7 @@ Natija / Результат: **20/20**
 - **UZ:** 2024-yil dollar kursi tahlili
 - **Kutilgan javob / Ожидаемый ответ:** 2024: minimum 11 657.83 (09.03.2024), maksimum 12 410.16 (31.12.2024), o‘rtacha ≈ 11 945.86 so‘m.
 - **Kalit qiymatlar / Ключевые значения:** `11 657.83`, `09.03.2024`, `12 410.16`, `31.12.2024`, `11 945.86`
-- **Agent:** RU: ✅ (0.02 s) · UZ: ✅ (0.01 s)
+- **Agent:** RU: ✅ (0.02 s) · UZ: ✅ (0.02 s)
 
 ## 3. 2025 bitimlar tahlili
 
@@ -69,7 +69,7 @@ Natija / Результат: **20/20**
 - **UZ:** 2025-yilda bekor qilingan bitimlar ulushi necha foiz?
 - **Kutilgan javob / Ожидаемый ответ:** 2025-yilda bekor qilingan bitimlar: 8 085 ta, ya’ni 6.98%.
 - **Kalit qiymatlar / Ключевые значения:** `6.98`, `8 085`
-- **Agent:** RU: ✅ (0.01 s) · UZ: ✅ (0.01 s)
+- **Agent:** RU: ✅ (0.02 s) · UZ: ✅ (0.02 s)
 
 ## 9. USD bashorati noyabr 2026
 
@@ -77,7 +77,7 @@ Natija / Результат: **20/20**
 - **UZ:** Dollar kursi bashorati noyabr oyi uchun
 - **Kutilgan javob / Ожидаемый ответ:** ⚠️ 2026-11 uchun ma’lumot yo‘qligi aytilishi SHART; taxmin ≈ 13 612.58 so‘m (95% oraliq 13 419.26 – 13 805.9).
 - **Kalit qiymatlar / Ключевые значения:** `13 612.58`, `13 419.26`, `13 805.9`, ⚠️ ogohlantiriş
-- **Agent:** RU: ✅ (0.01 s) · UZ: ✅ (0.01 s)
+- **Agent:** RU: ✅ (0.02 s) · UZ: ✅ (0.02 s)
 
 ## 10. Bitimlar soni bashorati 2027
 
