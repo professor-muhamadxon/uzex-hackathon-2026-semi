@@ -17,7 +17,7 @@ DATA_END = date(2026, 10, 30)
 ANNUL = "Аннулирован(Не оплачен)"
 MAX_HORIZON = 38  # months after 2026-10 (up to Dec 2029)
 
-ANALYSIS_RE = r"\b(tahlil\w*|taxlil\w*|analiz\w*|analit\w*|tendents\w*|trend\w*|obzor\w*|dinamik\w*|sharh\w*)"
+ANALYSIS_RE = r"\b(proanaliz\w*|tahlil\w*|taxlil\w*|analiz\w*|analit\w*|tendents\w*|trend\w*|obzor\w*|dinamik\w*|sharh\w*)"
 FORECAST_RE = r"\b(bashorat\w*|prognoz\w*|prognos\w*|forecast\w*|predict\w*|predskaz\w*|oldindan ayt\w*)"
 
 
@@ -172,6 +172,19 @@ def _analysis(p, series: str, meta: dict, subject: str, base_result):
                ROUND(100.0 * (last_v - first_v) / NULLIF(first_v, 0), 2) AS in_year_pct
         FROM y ORDER BY y
     """
+    if subject == "usd":
+        # yearly figures from daily rates (true average of the year, not mean of monthly means)
+        yearly_sql = f"""
+            WITH y AS (
+                SELECT EXTRACT(year FROM rate_date)::INT AS y, AVG(rate)::DOUBLE AS val,
+                       COUNT(DISTINCT date_trunc('month', rate_date)) AS months,
+                       arg_min(rate, rate_date)::DOUBLE AS first_v, arg_max(rate, rate_date)::DOUBLE AS last_v
+                FROM usd_rates WHERE {_usd_cond(p)} GROUP BY 1)
+            SELECT y, val, months, first_v, last_v,
+                   ROUND(100.0 * (val - LAG(val) OVER (ORDER BY y)) / NULLIF(LAG(val) OVER (ORDER BY y), 0), 2) AS yoy_pct,
+                   ROUND(100.0 * (last_v - first_v) / NULLIF(first_v, 0), 2) AS in_year_pct
+            FROM y ORDER BY y
+        """
     meta["yearly"] = fetch_dicts(yearly_sql)
     full_sql = sql + ";\n" + yearly_sql
     if subject == "usd":
