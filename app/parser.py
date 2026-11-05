@@ -16,6 +16,7 @@ from .catalog import (
     find_product_filters,
     find_regions,
 )
+from .config import RAG_ENABLED
 from .extra import detect_extra_intent
 from .normalize import match_key, normalize_text
 
@@ -26,6 +27,9 @@ UNSUPPORTED_TERMS = [
     "marja", "margin", "прибыл", "profit", "rentabel", "рентабел",
     "foyda", "фойда", "dividend", "дивиденд", "налог", "солиқ", "tax",
     "bonus", "бонус", "logistika narxi", "стоимость логистики",
+    # off-topic: nothing in the registry (must never fall back to a "total")
+    "ob-havo", "ob havo", "obhavo", "об-ҳаво", "об ҳаво", "обҳаво", "об-хаво", "погод", "weather",
+    "anekdot", "анекдот",
 ]
 
 
@@ -94,6 +98,7 @@ class ParsedQuery:
     contract_id: int | None = None
     deal_id: int | None = None
     top_n: int = 5
+    top_n_explicit: bool = False  # "first 5 ... grouped by ..." request handled as top-N
     group: str | None = None  # company | product | region | broker
     wants_usd: bool = False
     not_found_reason: str | None = None  # period | entity | field
@@ -167,7 +172,23 @@ def _find_dates(text: str) -> list[date]:
             dates.append(date(int(match[2]), int(match[1]), int(match[0])))
         except ValueError:
             continue
-    return dates
+    for y, m, d in re.findall(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)", text):  # ISO 2024-05-15
+        try:
+            dates.append(date(int(y), int(m), int(d)))
+        except ValueError:
+            continue
+    # "15 мая 2024", "2025-yil 3-martda", "2024 йил 10 июнда": day + month name + a year somewhere
+    years = [int(y) for y in re.findall(r"(?<!\d)(\d{4})(?!\d)", text) if 1900 <= int(y) <= 2100]
+    if years and not dates:
+        normalized = match_key(text)
+        for month, names in MONTHS.items():
+            for key in {match_key(name) for name in names}:
+                for day in re.findall(rf"(?<!\d)(\d{{1,2}})(?!\d)\s*(?:ta\s+)?{re.escape(key)}", normalized):
+                    try:
+                        dates.append(date(years[0], month, int(day)))
+                    except ValueError:
+                        continue
+    return sorted(set(dates))
 
 
 def _month_end(year: int, month: int) -> date:
@@ -248,6 +269,12 @@ def _find_relative_period(question: str, years: list[int]) -> tuple[date, date] 
         return _clip(date(qy, 3 * qn - 2, 1), _month_end(qy, 3 * qn))
     if has(r"\b(bu|joriy|etom|tekushch\w*)\s+(chorak|chorag|kvartal\w*)"):
         return _clip(date(anchor.year, 3 * cur_q - 2, 1), anchor)
+
+    # "yilning yarmi / yarmidagi" (no ordinal) -> first half, "вторая половина" -> second half
+    if has(r"yilning\s+yarm\w*|polovin\w*\s+god\w*|pervoy\s+polovin\w*"):
+        return _clip(date(year, 1, 1), date(year, 6, 30))
+    if has(r"(ikkinchi|vtoroy)\s+(yarim|polovin)\w*"):
+        return _clip(date(year, 7, 1), date(year, 12, 31))
 
     # half-year
     m = re.search(r"\b(1|2|birinchi|ikkinchi|perv\w*|vtor\w*)\s*-?\s*(?:yarim\s*yil|polugod\w*|yarmi)", t)
@@ -400,7 +427,7 @@ def _find_metric(text: str, question: str, product: ProductFilter) -> str:
     ):
         return "count"
     # "qaysi regionda eng ko'p bitim" / "самый ... по сделкам" -> count, not amount
-    if _has_any(text, ["eng kop", "самый", "самых", "qaysi", "больше всего", "наибольш"]) and _has_any(
+    if _has_any(text, ["eng kop", "eng kam", "eng oz", "самый", "самых", "qaysi", "больше всего", "меньше всего", "наибольш", "наименьш"]) and _has_any(
         text, ["bitim", "сделка", "сделок", "deal"]
     ) and not _has_any(text, money_words + price_words + volume_words):
         return "count"
@@ -433,7 +460,7 @@ def _find_group(text: str) -> str:
         return "broker"
     if _has_any(text, ["tovar", "товар", "mahsulot", "продукт", "product"]):
         return "product"
-    return "company"
+    return "company"  # tashkilot / организация / kompaniya / default
 
 
 def _is_top(text: str) -> bool:
@@ -441,19 +468,60 @@ def _is_top(text: str) -> bool:
         "top", "eng kop", "eng katta", "eng yuqori", "самый", "самых", "самая", "самое",
         "рейтинг", "ranking", "лидер", "лидир", "peshqadam", "yetakchi",
         "крупнейш", "активн", "faol", "eng yirik", "eng katta", "eng arzon", "eng qimmat",
+        "eng kam", "eng oz", "энг кам", "меньше всего", "наименьш", "наименее", "реже всего", "fewest", "least",
         "дешевле всего", "дороже всего", "самый дешев", "самая дешев", "самый дорог", "самая дорог", "qaysi", "больше всего", "наибольш",
     ]
     return _has_any(text, markers)
 
 
+ASC_WORDS = ["eng kam", "eng oz", "энг кам", "энг оз", "меньше всего", "наименьш", "наименее", "реже всего",
+             "fewest", "least",
+             "osish tartibida", "o‘sish tartibida", "o'sish tartibida", "ўсиш тартибида",
+             "по возрастанию", "в порядке возрастания", "ascending"]
+ENTITY_WORDS = (
+    r"(?:kompaniya|компания|компаний|компании|tashkilot|ташкилот|организаци|предприяти|korxona|корхона|"
+    r"tovar|товар|mahsulot|маҳсулот|продукт|наименован|region|viloyat|вилоят|broker|брокер|"
+    r"xaridor|харидор|sotuvchi|сотувчи|покупател|продав)"
+)
+# "Birinchi 5 ta", "dastlabki 5", "первые 5", "top 5", "eng ... 5"
+TOP_PREFIX = r"(?:top|топ|eng|энг|самых|первых|первые|рейтинг|birinchi|биринчи|dastlabki|дастлабки|ilk|илк)"
+
+
+def _explicit_top_n(text: str) -> int | None:
+    match = re.search(TOP_PREFIX + r"\s*[-–]?\s*(\d{1,3})", text, re.IGNORECASE)
+    if match:
+        return max(1, min(50, int(match.group(1))))
+    match = re.search(r"(\d{1,3})\s*(?:ta|та)?\s*" + ENTITY_WORDS, text, re.IGNORECASE)
+    if match:
+        return max(1, min(50, int(match.group(1))))
+    return None
+
+
 def _find_top_n(text: str) -> int:
-    match = re.search(r"(?:top|топ|eng|энг|самых|первых|рейтинг)\s*[-–]?\s*(\d{1,3})", text, re.IGNORECASE)
-    if match:
-        return max(1, min(50, int(match.group(1))))
-    match = re.search(r"(\d{1,3})\s*(?:ta|та)?\s*(?:kompaniya|компания|tovar|товар|region|viloyat|broker)", text, re.IGNORECASE)
-    if match:
-        return max(1, min(50, int(match.group(1))))
-    return 5
+    return _explicit_top_n(text) or 5
+
+
+GROUPING_WORDS = [
+    "guruhla", "гурухла", "группир", "сгруппир", "kesimida", "кесимида", "в разрезе",
+    "har bir", "ҳар бир", "для каждого", "по каждому", "каждого", "каждый",
+]
+SORT_WORDS = [
+    "saralang", "saralab", "tartibida", "саралан", "тартибида", "отсортир", "сортир", "по убыванию", "по возрастанию",
+]
+
+
+def _explicit_group(text: str) -> str | None:
+    """Group noun named in the question (None when the question names none)."""
+    if _has_any(text, ["region", "вилоят", "viloyat", "област", "регион"]):
+        return "region"
+    if _has_any(text, ["broker", "брокер"]):
+        return "broker"
+    if _has_any(text, ["tovar", "товар", "mahsulot", "маҳсулот", "продукт", "наименован", "product"]):
+        return "product"
+    if _has_any(text, ["kompaniya", "компани", "tashkilot", "ташкилот", "организац", "korxona", "корхона",
+                       "xaridor", "харидор", "sotuvchi", "сотувчи", "покупател", "продав"]):
+        return "company"
+    return None
 
 
 def _find_ids(text: str) -> tuple[int | None, int | None]:
@@ -596,9 +664,13 @@ def parse_question(question: str) -> ParsedQuery:
 
     if _has_any(text, UNSUPPORTED_TERMS):
         parsed.not_found_reason = parsed.not_found_reason or "field"
-        parsed.not_found_detail = ", ".join(
-            term for term in UNSUPPORTED_TERMS if _has_any(text, [term])
-        )
+        hits = [term for term in UNSUPPORTED_TERMS if _has_any(text, [term])]
+        # variants of one word (ob-havo / ob havo / об-ҳаво) would be listed together: keep one per script
+        shown: list[str] = []
+        for term in hits:
+            if not any(term in other or other in term for other in shown):
+                shown.append(term)
+        parsed.not_found_detail = ", ".join(shown[:1])
 
     parsed.status, parsed.statuses = _find_status(text)
     parsed.contract_type = _find_contract_type(text)
@@ -619,6 +691,12 @@ def parse_question(question: str) -> ParsedQuery:
         parsed.not_found_detail = parsed.not_found_detail or parsed.product.ambiguous
     parsed.regions, parsed.region_label = find_regions(question)
     parsed.broker, parsed.broker_score = find_broker(question)
+    if RAG_ENABLED and not parsed.not_found_reason:
+        from .rag import unknown_noun
+        noun = unknown_noun(match_key(question), bool(
+            parsed.product.tnveds or parsed.product.categories or parsed.company or parsed.regions or parsed.broker))
+        if noun:
+            parsed.not_found_reason, parsed.not_found_detail = "product_unknown", noun
 
     if parsed.company_score == -1:
         inn = re.search(r"(?<!\d)(\d{9})(?!\d)", question)
@@ -636,6 +714,8 @@ def parse_question(question: str) -> ParsedQuery:
     elif _has_any(text, ["qimmat", "қиммат", "дорог", "самая высокая цена", "eng yuqori narx"]):
         parsed.metric = "avg_price"
     parsed.top_n = _find_top_n(question)
+    if _has_any(text, ASC_WORDS):
+        parsed.order_asc = True
     parsed.group = _find_group(text)
 
     normalized = match_key(text)
@@ -667,8 +747,27 @@ def parse_question(question: str) -> ParsedQuery:
     else:
         parsed.intent = "unknown"
 
+    # "Group the deals by product name, count per product, sort descending, show the first 5":
+    # an explicit ranking request (grouping/sorting words + a stated N) is a top-N query.
+    if (
+        parsed.intent in {"total", "unknown", "product_stats", "region_stats"}
+        and parsed.contract_id is None
+        and parsed.deal_id is None
+        and _has_any(text, GROUPING_WORDS + SORT_WORDS)
+        and _explicit_top_n(question) is not None
+    ):
+        grouped = _explicit_group(text)
+        if grouped == "product" and (parsed.product.tnveds or parsed.product.categories):
+            grouped = None  # the product is a filter here ("neft mahsulotlari"), not the grouping
+        if grouped == "region" and parsed.regions:
+            grouped = None
+        if grouped:
+            parsed.intent = "top"
+            parsed.group = grouped
+            parsed.top_n_explicit = True
+
     # Top over products/regions/brokers/companies (explicit group wins).
-    if parsed.intent == "top":
+    if parsed.intent == "top" and not parsed.top_n_explicit:
         parsed.group = _find_group(text)
 
     extra_intent = detect_extra_intent(parsed, question)

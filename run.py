@@ -6,6 +6,7 @@
     python run.py --bot           # only the Telegram bot
     python run.py --port 9000     # web port (default 8000, or $PORT)
     python run.py --check         # build DB if needed, run smoke tests, exit
+    python run.py --stop          # stop every running bot and web process (and supervisors)
 
 Children are restarted if they crash (with back-off). Ctrl+C / SIGTERM stops everything.
 Logs: logs/web.out, logs/bot.out, logs/qa.jsonl.
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -60,6 +62,68 @@ def other_bot_running() -> list[str]:
     except (FileNotFoundError, OSError):
         return []
     return [pid for pid in out.split() if pid != str(os.getpid())]
+
+
+SUPERVISOR_RE = re.compile(r"""(^|[\\/\s"'])run\.py(["'\s]|$)""")
+CHILD_RES = [re.compile(r"-m\s+app\.bot(\s|$)"), re.compile(r"uvicorn\s+app\.api:app")]
+
+
+def list_processes() -> list[tuple[int, str]]:
+    """(pid, command line) of every process; works on Windows and POSIX."""
+    try:
+        if os.name == "nt":
+            ps = ('Get-CimInstance Win32_Process | ForEach-Object '
+                  '{ "$($_.ProcessId)`t$($_.CommandLine)" }')
+            out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                                 capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
+            rows = [line.split("\t", 1) for line in out.splitlines() if "\t" in line]
+        else:
+            out = subprocess.run(["ps", "-eo", "pid=,args="], capture_output=True, text=True).stdout
+            rows = [line.strip().split(None, 1) for line in out.splitlines() if line.strip()]
+    except (FileNotFoundError, OSError):
+        return []
+    result = []
+    for row in rows:
+        if len(row) == 2 and row[0].strip().isdigit():
+            result.append((int(row[0]), row[1]))
+    return result
+
+
+def _kill(pid: int) -> None:
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
+    else:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+
+
+def stop_all() -> int:
+    """Stop every run.py supervisor, bot (python -m app.bot) and web (uvicorn app.api) process.
+
+    Supervisors go first, otherwise they would restart the children we kill.
+    """
+    me = {os.getpid(), os.getppid()}
+    procs = [(pid, cmd) for pid, cmd in list_processes() if pid not in me]
+    supervisors = [(p, c) for p, c in procs if SUPERVISOR_RE.search(c) and "--stop" not in c]
+    children = [(p, c) for p, c in procs if any(r.search(c) for r in CHILD_RES)]
+    if not supervisors and not children:
+        log("nothing to stop: no bot or web process is running")
+        return 0
+    for group in (supervisors, children):
+        for pid, cmd in group:
+            log(f"stopping pid {pid}: {cmd[:90]}")
+            _kill(pid)
+        time.sleep(1)
+    time.sleep(1)
+    alive = {pid for pid, _ in list_processes()}
+    left = [pid for pid, _ in supervisors + children if pid in alive]
+    if left:
+        log(f"still running: {', '.join(map(str, left))}")
+        return 1
+    log("all bot and web processes stopped")
+    return 0
 
 
 class Child:
@@ -112,9 +176,13 @@ def main() -> int:
     mode.add_argument("--web", action="store_true", help="only the web app")
     mode.add_argument("--bot", action="store_true", help="only the Telegram bot")
     mode.add_argument("--check", action="store_true", help="build DB if needed, run tests, exit")
+    mode.add_argument("--stop", action="store_true", help="stop all running bot and web processes, exit")
     ap.add_argument("--host", default=os.getenv("HOST", "0.0.0.0"))
     ap.add_argument("--port", type=int, default=int(os.getenv("PORT", "8000")))
     args = ap.parse_args()
+
+    if args.stop:
+        return stop_all()
 
     os.chdir(ROOT)
     env = load_env()

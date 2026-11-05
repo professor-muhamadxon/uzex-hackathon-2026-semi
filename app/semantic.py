@@ -15,7 +15,7 @@ import re
 
 from .catalog import find_product_filters
 from .config import LLM_ENABLED
-from .llm import _client_instance, _SEMAPHORE, LLM_MODEL
+from .llm import _client_instance, _reasoning_kwargs, _SEMAPHORE, LLM_MODEL
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +55,7 @@ def _call(question: str) -> dict | None:
                 temperature=0,
                 max_tokens=200,
                 response_format={"type": "json_object"},
+                **_reasoning_kwargs(),
                 messages=[{"role": "system", "content": SYSTEM}, {"role": "user", "content": question}],
             )
         text = response.choices[0].message.content or ""

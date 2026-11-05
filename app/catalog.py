@@ -292,6 +292,14 @@ def find_company(question: str, threshold: int = 85) -> tuple[Company | None, in
             best_score = score
             best_company = catalog.companies[index]
     if best_score < threshold:
+        from .config import RAG_ENABLED
+        if RAG_ENABLED and len(query) >= 6:
+            from . import rag
+            hit = rag.resolve(query, "company", min_score=0.80, margin=0.15)
+            if hit:
+                company = next((c for c in catalog.companies if c.inn == hit.entity), None)
+                if company:
+                    return company, int(hit.score * 100)
         return None, best_score
     return best_company, best_score
 
@@ -323,15 +331,41 @@ def find_broker(question: str, threshold: int = 86) -> tuple[Broker | None, int]
             best_score = int(score)
             best = catalog.brokers[index]
     if best_score < threshold:
+        from .config import RAG_ENABLED
+        query = _entity_candidate(question)
+        if RAG_ENABLED and len(query) >= 6:
+            from . import rag
+            hit = rag.resolve(query, "broker", min_score=0.80, margin=0.15)
+            if hit:
+                broker = next((b for b in catalog.brokers if b.code == hit.entity), None)
+                if broker:
+                    return broker, int(hit.score * 100)
         return None, best_score
     return best, best_score
 
+
+# Grammar / data words and their inflections must never be "corrected" into a product name
+# ("kundagi" -> "kunja", "bitimga" -> "bitum", "tuzilgan", "hisobla", "aylantir" ...).
+FUZZY_STOP_PREFIXES = (
+    "bitim", "kontrakt", "summa", "sdelk", "narx", "hajm", "tebran", "kun", "tuzil", "hisobl", "aylantir",
+    "rasmiy", "javob", "korinish", "kurs", "valyut", "umumiy", "ortacha", "savdo", "davomida", "amalga",
+    "oshir", "birja", "iqtisod", "tahlil", "qiymat", "aniql", "kompleks", "ulush", "aylanma", "hudud",
+    "faol", "bitta", "kompan", "mahsulot", "tovar", "viloyat", "hisobot", "korsat", "ko'rsat", "tegishli",
+    "shartnom", "tashkilot", "ishtirok", "hozir", "keyin", "oldin", "boshqa", "yana", "faqat", "ammo",
+)
 
 FUZZY_STOP = {
     "butun", "davr", "boyicha", "necha", "foizda", "foizga", "oshgan", "osgan", "kamaygan", "tushgan",
     "narxi", "narx", "qancha", "nechta", "sotilgan", "sotgan", "bitim", "bitimlar", "summa", "summasi",
     "tahlil", "analiz", "bashorat", "kompaniya", "viloyat", "viloyatida", "hajmi", "tovar", "mahsulot",
     "jami", "yilda", "oyda", "ortacha", "eksport", "import", "dinamika", "dinamikasi", "kursi",
+    # Grammatical / question words must never be "corrected" into a product name:
+    # "kunlari" would otherwise become "kunja" (cottonseed meal) and "ko'rsat" -> "korma".
+    "kun", "kuni", "kunlar", "kunlari", "kunlarda", "kategoriya", "kategoriyasi", "kategoriyalar",
+    "kategoriyalari", "guruh", "guruhlari", "boyicha", "kesim", "kesimi", "kesimida", "tarkibi",
+    "tarkibida", "turi", "turlari", "ulush", "ulushi", "korsat", "korsating", "korsatish",
+    "korsatilsin", "kerak", "bolgan", "bolib", "hisobida", "korinishida", "davomida", "mobaynida",
+    "orasida", "ichida", "qanday", "qanaqa", "kak", "kakoy", "kakie", "kakih",
 }
 
 
@@ -340,6 +374,9 @@ def _fuzzy_products(text: str, result: ProductFilter, catalog) -> None:
     keys = [(match_key(kw), kw, tnved) for kw, tnved in candidates if len(match_key(kw)) >= 5 and " " not in match_key(kw)]
     for token in text.split():
         if len(token) < 5 or token in FUZZY_STOP or token.isdigit():
+            continue
+        # inflected forms of data words ("bitimga", "summani", "kontraktlar") are never products
+        if token.startswith(FUZZY_STOP_PREFIXES):
             continue
         scored: dict[str, tuple[float, str]] = {}
         for key, kw, tnved in keys:
@@ -405,9 +442,33 @@ def find_product_filters(question: str) -> ProductFilter:
                 result.label = product.name
                 break
 
+    # RAG fallback (flag-gated): char-n-gram retrieval, strict threshold + margin.
+    if not result.tnveds and not result.categories and not result.ambiguous:
+        _rag_products(text, result, catalog)
+
     if result.tnveds and not result.label:
         result.label = ", ".join(result.tnveds)
     return result
+
+
+def _rag_candidates(text: str) -> list[str]:
+    return [t for t in text.split() if len(t) >= 5 and t not in FUZZY_STOP
+            and t not in COMMON_QUESTION_WORDS and not t.isdigit()]
+
+
+def _rag_products(text: str, result: ProductFilter, catalog) -> None:
+    from .config import RAG_ENABLED
+    if not RAG_ENABLED:
+        return
+    from . import rag
+    for token in _rag_candidates(text):
+        hit = rag.resolve(token, "product")
+        if hit:
+            result.tnveds.append(hit.entity)
+            result.corrections.append((token, hit.matched))
+            product = next((pr for pr in catalog.products if pr.tnved == hit.entity), None)
+            result.label = product.name if product else hit.entity
+            return
 
 
 def find_regions(question: str) -> tuple[list[str], str]:
@@ -422,6 +483,16 @@ def find_regions(question: str) -> tuple[list[str], str]:
             if region not in found:
                 found.append(region)
                 labels.append(region)
+
+    if not found:
+        from .config import RAG_ENABLED
+        if RAG_ENABLED:
+            from . import rag
+            for token in _rag_candidates(text):
+                hit = rag.resolve(token, "region")
+                if hit:
+                    found, labels = [hit.entity], [hit.entity]
+                    break
 
     # "Toshkent" without qualifier is ambiguous: city or region.
     if not found and _keyword_in_text(text, "toshkent"):

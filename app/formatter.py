@@ -283,11 +283,18 @@ def _format_top(result: QueryResult, p: ParsedQuery) -> str:
             ("ru", "buyer"): "покупателей", ("ru", "seller"): "продавцов",
         }[(lang, p.company_role)]
     metric_label = METRIC_UZ.get(metric, metric) if lang == "uz" else METRIC_RU.get(metric, metric)
-    header = (
-        f"Top {len(result.rows)} {group_label} ({metric_label} bo‘yicha):"
-        if lang == "uz"
-        else f"Топ-{len(result.rows)} {group_label} (по показателю «{metric_label}»):"
-    )
+    if getattr(p, "order_asc", False):
+        header = (
+            f"Eng kam {metric_label} bo‘yicha {len(result.rows)} ta {group_label} (kamdan ko‘pga qarab):"
+            if lang == "uz"
+            else f"{len(result.rows)} {group_label} с наименьшим показателем «{metric_label}» (по возрастанию):"
+        )
+    else:
+        header = (
+            f"Top {len(result.rows)} {group_label} ({metric_label} bo‘yicha):"
+            if lang == "uz"
+            else f"Топ-{len(result.rows)} {group_label} (по показателю «{metric_label}»):"
+        )
     lines = [header]
     for index, row in enumerate(result.rows, start=1):
         label = row.get("label") or row.get("code") or "—"

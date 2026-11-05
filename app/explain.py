@@ -36,8 +36,12 @@ def explain(result, p) -> str:
     elif intent == "export_stats":
         text = (UZ_METRIC if uz else RU_METRIC)["usd"]
     elif intent == "top":
-        text = (f"bitimlar {group} bo‘yicha guruhlandi va «{m}» bo‘yicha kamayish tartibida saralandi"
-                if uz else f"сделки сгруппированы по {group} и отсортированы по убыванию показателя «{m}»")
+        asc = bool(getattr(p, "order_asc", False))
+        order_uz, order_ru = ("o‘sish", "возрастанию") if asc else ("kamayish", "убыванию")
+        tie_uz = "; teng qiymatlarda INN bo‘yicha tartiblandi" if asc else ""
+        tie_ru = "; при равных значениях — по ИНН" if asc else ""
+        text = (f"bitimlar {group} bo‘yicha guruhlandi va «{m}» bo‘yicha {order_uz} tartibida saralandi{tie_uz}"
+                if uz else f"сделки сгруппированы по {group} и отсортированы по {order_ru} показателя «{m}»{tie_ru}")
     elif intent == "company_profile":
         text = ("kompaniya sotuvchi yoki xaridor bo‘lgan bitimlar INN bo‘yicha tanlandi; soni, summasi va asosiy tovarlari hisoblandi"
                 if uz else "выбраны сделки, где компания (по ИНН) — продавец или покупатель; посчитаны количество, сумма и основные товары")
@@ -82,6 +86,14 @@ def explain(result, p) -> str:
     elif intent == "delivery":
         text = ("«Поставлено» ustuni bo‘yicha: yetkazilmagan = sotilgan lotlar − yetkazilgan lotlar (to‘langan va ijro etilgan bitimlar)"
                 if uz else "по полю «Поставлено»: недопоставлено = куплено лотов − поставлено лотов (оплаченные и исполненные сделки)")
+    elif intent == "overview":
+        text = ("aylanma = bekor qilinmagan bitimlarning so‘mdagi summasi (USD bitimlari bitim kunidagi rasmiy kurs bo‘yicha o‘girilgan); "
+                "hududlar — sotuvchi ombori viloyati; faol kompaniya — sotuvchi yoki xaridor sifatida qatnashgan bitimlar soni"
+                if uz else "оборот = сумма неаннулированных сделок в сумах (сделки в USD пересчитаны по официальному курсу на дату сделки); "
+                "регион — склад продавца; активность компании — число сделок как продавца или покупателя")
+    elif intent == "deal_summary":
+        text = ("bitimlar soni (barcha holatlar), umumiy summa va o‘rtacha summa (bekor qilinganlarsiz): o‘rtacha = umumiy summa ÷ bekor qilinmagan bitimlar soni"
+                if uz else "количество сделок (все статусы), общая и средняя сумма (без аннулированных): средняя = общая сумма ÷ число неаннулированных сделок")
     elif intent == "avg_deal":
         text = ("bitimlar so‘mdagi summasining o‘rtachasi va medianasi (bekor qilinganlarsiz)"
                 if uz else "среднее и медиана суммы сделки в сумах (без аннулированных)")

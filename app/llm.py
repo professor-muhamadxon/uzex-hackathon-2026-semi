@@ -7,7 +7,14 @@ import threading
 
 from openai import OpenAI
 
-from .config import LLM_API_KEY, LLM_BASE_URL, LLM_ENABLED, LLM_MODEL, LLM_TIMEOUT
+from .config import (
+    LLM_API_KEY,
+    LLM_BASE_URL,
+    LLM_ENABLED,
+    LLM_MODEL,
+    LLM_REASONING_EFFORT,
+    LLM_TIMEOUT,
+)
 
 _client: OpenAI | None = None
 _SEMAPHORE = threading.BoundedSemaphore(4)  # at most 4 concurrent LLM calls
@@ -115,6 +122,16 @@ def _client_instance() -> OpenAI:
     return _client
 
 
+def _reasoning_kwargs() -> dict:
+    """Stop thinking models from spending the token budget on reasoning.
+
+    Ollama's OpenAI-compatible endpoint accepts ``reasoning_effort="none"``; without
+    it qwen3-style models return empty content and the call looks like a timeout.
+    Cloud endpoints that do not support the field are left untouched.
+    """
+    return {"reasoning_effort": LLM_REASONING_EFFORT} if LLM_REASONING_EFFORT else {}
+
+
 def _extract_sql(text: str) -> str | None:
     if not text:
         return None
@@ -154,6 +171,7 @@ def generate_sql(question: str, lang: str, previous_error: str | None = None) ->
                 model=LLM_MODEL,
                 temperature=0,
                 max_tokens=900,
+                **_reasoning_kwargs(),
                 messages=[
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},

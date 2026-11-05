@@ -12,7 +12,7 @@ from datetime import date
 from .db import fetch_dicts
 from .normalize import match_key
 
-EXTRA_INTENTS = {"usd_rate", "extreme_deal", "distinct_parties", "compare_periods", "status_share", "avg_deal", "contracts_count", "delivery", "analysis", "forecast", "breakdown"}
+EXTRA_INTENTS = {"usd_rate", "extreme_deal", "distinct_parties", "compare_periods", "status_share", "avg_deal", "deal_summary", "overview", "contracts_count", "delivery", "analysis", "forecast", "breakdown"}
 
 ANNUL = "Аннулирован(Не оплачен)"
 
@@ -25,9 +25,30 @@ BREAKDOWN_DIMS = [
     ("weekday", r"(hafta kun\w*|haftaning kun\w*|den nedeli|dn\w+ nedeli|dni nedeli|vix\w*dn\w*|dam olish kun\w*)"),
     ("region", r"((viloyat|region|hudud)\w* (boyicha|kesimida|bo.?yicha)|po (region|oblast)\w*|v kajdom (region|oblast)\w*|kajdom (region|oblast)\w*|v razreze (region|oblast)\w*)"),
     ("product", r"((tovar|mahsulot)\w* (turlari |turi )?(boyicha|kesimida)|po tovar\w*|po vidam tovar\w*|v razreze tovar\w*|kajdomu tovaru|kajdyy tovar)"),
+    ("category", r"(kategoriya\w*|категори\w*|категор\w*|tovar guruh\w*|guruh\w* (boyicha|kesimida)|tovar toifalari)"),
 ]
 WEEKDAY_UZ = {1: "dushanba", 2: "seshanba", 3: "chorshanba", 4: "payshanba", 5: "juma", 6: "shanba", 7: "yakshanba"}
 WEEKDAY_RU = {1: "понедельник", 2: "вторник", 3: "среда", 4: "четверг", 5: "пятница", 6: "суббота", 7: "воскресенье"}
+
+
+OVERVIEW_INDICATORS = [
+    r"(jami|umumiy|obshch\w*|vsego)\s+(\w+\s+)?(bitim\w*|sdelk\w*)|bitimlar soni|kolichestvo sdelok",
+    r"(o.?rtacha|sredn\w*)\s+(\w+\s+)?(qiymat\w*|summa\w*|stoimost\w*|znachen\w*)",
+    r"(eng katta|eng yirik|krupnejsh\w*|krupnyj\w*|samyh krupn\w*|naibolsh\w*)\s+(\w+\s+)?(qiymat\w*|summa\w*|bitim\w*|sdelk\w*|stoimost\w*)|katta qiymat",
+    r"(hudud\w*|viloyat\w*|region\w*|oblast\w*)",
+    r"(mahsulot\w*|tovar\w*|produkt\w*|product\w*)",
+    r"(eng faol|samyh aktivn\w*|aktivn\w*\s+kompan\w*|faol\s+kompaniya\w*)",
+    r"(usd|dollar\w*).*(uzs|som|sum\b)|(ulush\w*|dolya|dolyu|doli)",
+    r"\b(top|топ)\s*-?\s*\d+|\b(10|5)\s+ta\b",
+]
+
+
+def is_overview(t: str) -> bool:
+    """Several indicators in one request ("complex analysis: totals, average, top deals, regions ...")."""
+    return bool(
+        _has(t, r"(kompleks\w*|tahlil\w*|analiz\w*|ekonomich\w*|iqtisodiy|otchet\w*|hisobot\w*)")
+        and sum(1 for pattern in OVERVIEW_INDICATORS if _has(t, pattern)) >= 5
+    )
 
 
 def detect_breakdown_dim(t: str) -> str | None:
@@ -43,13 +64,20 @@ def detect_extra_intent(p, question: str) -> str | None:
         return None
     from .analytics import detect_analytics
 
+    if is_overview(t):
+        return "overview"
     analytic = detect_analytics(p, question)
     if analytic:
         return analytic
     if _has(t, r"\bkurs\w*") and not _has(t, r"\b(summa\w*|summ\w*|bitim\w*|sdel\w*|eksport\w*)"):
         p.extra = {}
         return "usd_rate"
+    if getattr(p, "top_n_explicit", False):
+        return None  # explicit "group + sort + first N" request stays a ranking
     dim = detect_breakdown_dim(t)
+    if dim == "product" and (p.product.tnveds or p.product.categories):
+        # "neft mahsulotlari bo‘yicha nechta bitim": the phrase names a product group, it is not a split request
+        dim = None
     if not dim and _has(t, r"(qaysi (viloyat|region|hudud)\w*|kakoy region|v kakom region|kakih region)") and _has(
         t, r"(kompaniya|ishtirokchi|qatnashchi|kompani|uchastnik|firm)"
     ) and not _has(t, r"(kontrakt|bitim|sdelk|summa|sum)"):
@@ -82,6 +110,14 @@ def detect_extra_intent(p, question: str) -> str | None:
     if _has(t, r"\b(qaysi oy\w*|qaysi oyda|v kakom mesyats\w*|kakoy mesyats|kakom mesyatse)"):
         p.extra = {"grain": "month", "pick_max": True}
         return "compare_periods"
+    # "count the deals, the total turnover and the average amount per deal" -> one combined answer
+    if (
+        _has(t, r"(o.?rtacha|sredn\w*)")
+        and _has(t, r"(summa\w*|summ\w*|stoimost\w*|oborot\w*|aylanma\w*)")
+        and _has(t, r"(sonin\w*|soni|sanab|sanang|nechta|skolko|kolichestvo|podschita\w*|hisoblab)")
+        and _has(t, r"(bitta bitim\w*|bitimga|har bir bitim\w*|bir bitim\w*|odnu sdelk\w*|odnoy sdelk\w*|kazhdoy sdelk\w*|kajdoy sdelk\w*|na sdelk\w*|bitimning o.?rtacha)")
+    ):
+        return "deal_summary"
     if _has(t, r"(o.?rtacha|srednyaya|sredniy|srednee)\s+(\w+\s+)?(summa\w*|stoimost\w*|razmer\w*|qiymat\w*)\s+(\w+\s+)?(bitim\w*|sdelk\w*)") or _has(
         t, r"(bitim\w*)\s+(\w+\s+)?o.?rtacha\s+(summa|qiymat)"):
         return "avg_deal"
@@ -153,6 +189,10 @@ def run_extra(p, build_where, base_result):
         return _breakdown(p, build_where, base_result)
     if p.intent == "avg_deal":
         return _avg_deal(p, build_where, base_result)
+    if p.intent == "deal_summary":
+        return _deal_summary(p, build_where, base_result)
+    if p.intent == "overview":
+        return _overview(p, build_where, base_result)
     if p.intent == "delivery":
         return _delivery(p, build_where, base_result)
     if p.intent == "contracts_count":
@@ -190,6 +230,8 @@ def _breakdown(p, build_where, base_result):
         key, label, limit = "isodow(deal_date)", "NULL", 7
     elif dim == "product":
         key, label, limit = "tnved_code", "any_value(contract_product_name)", 20
+    elif dim == "category":
+        key, label, limit = "category", "NULL", 20
     else:
         key, label, limit = "region_uz", "NULL", 20
     if metric == "usd":
@@ -232,6 +274,82 @@ def _avg_deal(p, build_where, base_result):
     if rows and not rows[0].get("deals"):
         rows = []
     return base_result(p, "avg_deal", rows, sql, {"annul_excluded": not p.statuses})
+
+
+def _deal_summary(p, build_where, base_result):
+    """Deal count (all statuses), total turnover and average amount per deal (annulled excluded)."""
+    where = build_where(p)
+    sql = f"""
+        SELECT COUNT(*) AS deals_all,
+               COUNT(*) FILTER (WHERE status = '{ANNUL}') AS annulled,
+               COUNT(*) FILTER (WHERE status <> '{ANNUL}') AS deals_counted,
+               SUM(amount_uzs) FILTER (WHERE status <> '{ANNUL}') AS total_uzs,
+               AVG(amount_uzs) FILTER (WHERE status <> '{ANNUL}') AS avg_uzs
+        FROM deals_enriched WHERE {where}
+    """
+    rows = fetch_dicts(sql)
+    if rows and not rows[0].get("deals_all"):
+        rows = []
+    return base_result(p, "deal_summary", rows, sql, {})
+
+
+def _overview(p, build_where, base_result):
+    """Complex economic overview: totals, average deal, top deals, regions, products, companies, USD/UZS split.
+
+    Turnover is amount_uzs (USD deals converted at the official rate of the deal date); annulled deals are
+    excluded from every sum, ranking and share, and are only counted in the first line.
+    """
+    where_all = build_where(p)
+    where = f"{where_all} AND status <> '{ANNUL}'"
+    summary = fetch_dicts(f"""
+        SELECT COUNT(*) AS deals_all,
+               COUNT(*) FILTER (WHERE status = '{ANNUL}') AS annulled,
+               COUNT(*) FILTER (WHERE status <> '{ANNUL}') AS deals_counted,
+               SUM(amount_uzs) FILTER (WHERE status <> '{ANNUL}') AS total_uzs,
+               AVG(amount_uzs) FILTER (WHERE status <> '{ANNUL}') AS avg_uzs
+        FROM deals_enriched WHERE {where_all}
+    """)
+    if not summary or not summary[0].get("deals_all"):
+        return base_result(p, "overview", [], "", {})
+    top_deals = fetch_dicts(f"""
+        SELECT d.deal_id, d.deal_date, d.contract_product_name AS product, d.amount_uzs,
+               ps.name AS seller, pb.name AS buyer
+        FROM deals_enriched d
+        LEFT JOIN participants ps ON ps.inn = d.seller_inn
+        LEFT JOIN participants pb ON pb.inn = d.buyer_inn
+        WHERE {where} ORDER BY d.amount_uzs DESC, d.deal_id LIMIT 10
+    """)
+    regions = fetch_dicts(f"""
+        SELECT region_uz AS label, SUM(amount_uzs) AS value, COUNT(*) AS deals
+        FROM deals_enriched WHERE {where} GROUP BY 1 ORDER BY value DESC LIMIT 5
+    """)
+    products = fetch_dicts(f"""
+        SELECT tnved_code AS code, any_value(contract_product_name) AS label, SUM(amount_uzs) AS value, COUNT(*) AS deals
+        FROM deals_enriched WHERE {where} GROUP BY tnved_code ORDER BY value DESC LIMIT 5
+    """)
+    companies = fetch_dicts(f"""
+        WITH sides AS (
+            SELECT seller_inn AS inn, deal_id FROM deals_enriched WHERE {where}
+            UNION
+            SELECT buyer_inn AS inn, deal_id FROM deals_enriched WHERE {where}
+        )
+        SELECT s.inn AS code, p.name AS label, COUNT(DISTINCT s.deal_id) AS deals
+        FROM sides s LEFT JOIN participants p ON p.inn = s.inn
+        GROUP BY s.inn, p.name ORDER BY deals DESC, s.inn LIMIT 10
+    """)
+    currency = fetch_dicts(f"""
+        SELECT CASE WHEN currency = 'Доллар США' THEN 'USD' ELSE 'UZS' END AS cur,
+               COUNT(*) AS deals, SUM(amount_uzs) AS value
+        FROM deals_enriched WHERE {where} GROUP BY 1 ORDER BY 1
+    """)
+    total_value = float(summary[0]["total_uzs"] or 0)
+    total_deals = sum(float(c["deals"]) for c in currency) or 1.0
+    for c in currency:  # shares are computed here so the number guard sees them as sourced values
+        c["share_value"] = round(100.0 * float(c["value"] or 0) / total_value, 2) if total_value else 0.0
+        c["share_deals"] = round(100.0 * float(c["deals"]) / total_deals, 2)
+    meta = {"top_deals": top_deals, "regions": regions, "products": products,
+            "companies": companies, "currency": currency}
+    return base_result(p, "overview", summary, "-- overview: 6 queries on deals_enriched", meta)
 
 
 def _contracts_count(p, base_result):
@@ -521,6 +639,70 @@ def format_extra(result, p, fmt_num, fmt_money, fmt_date) -> str:
         )
         return "\n".join(lines)
 
+    if result.intent == "overview":
+        r, m = rows[0], result.meta
+        total = float(r["total_uzs"] or 0)
+        deals_label = "ta bitim" if uz else "сделок"
+
+        def money(value):
+            return fmt_money(value, p.lang)
+
+        def ranked(title_uz, title_ru, items, label, value_key="value", extra=None):
+            lines = ["", title_uz if uz else title_ru]
+            for i, it in enumerate(items, start=1):
+                tail = f" ({fmt_num(it['deals'])} {deals_label})" if extra == "deals" and it.get("deals") is not None else ""
+                lines.append(f"{i}. {label(it)} — {money(it[value_key])}{tail}")
+            return lines
+
+        if uz:
+            out = [
+                "Kompleks iqtisodiy tahlil (summalar so‘mda; USD bitimlari bitim kuni kursi bo‘yicha o‘girilgan, bekor qilinganlarsiz):",
+                f"• Jami bitimlar soni: {fmt_num(r['deals_all'])} ta (shundan bekor qilingan {fmt_num(r['annulled'])} ta)",
+                f"• Jami savdo summasi: {money(r['total_uzs'])} ({fmt_num(r['deals_counted'])} ta bekor qilinmagan bitim)",
+                f"• Bitta bitimning o‘rtacha qiymati: {money(r['avg_uzs'])}",
+            ]
+        else:
+            out = [
+                "Комплексный экономический анализ (суммы в сумах; сделки в USD пересчитаны по курсу на дату сделки, без аннулированных):",
+                f"• Всего сделок: {fmt_num(r['deals_all'])} (из них аннулировано {fmt_num(r['annulled'])})",
+                f"• Общая сумма сделок: {money(r['total_uzs'])} ({fmt_num(r['deals_counted'])} неаннулированных сделок)",
+                f"• Средняя сумма одной сделки: {money(r['avg_uzs'])}",
+            ]
+        out += ranked(
+            "Eng katta qiymatga ega 10 ta bitim:", "10 самых крупных сделок:", m["top_deals"],
+            lambda it: f"№{it['deal_id']} {fmt_date(it['deal_date'])}, {it.get('product') or '—'}", "amount_uzs",
+        )
+        out += ranked("Savdo aylanmasi bo‘yicha TOP-5 hudud:", "ТОП-5 регионов по обороту:", m["regions"],
+                      lambda it: it["label"] or "—", extra="deals")
+        out += ranked("Savdo aylanmasi bo‘yicha TOP-5 mahsulot:", "ТОП-5 товаров по обороту:", m["products"],
+                      lambda it: f"{it['label']} (TNVED: {it['code']})", extra="deals")
+        out += ["", "Eng faol 10 ta kompaniya (bitimlar soni bo‘yicha):" if uz else "10 самых активных компаний (по числу сделок):"]
+        for i, it in enumerate(m["companies"], start=1):
+            out.append(f"{i}. {it['label'] or '—'} (INN: {it['code']}) — {fmt_num(it['deals'])} {deals_label}")
+        out += ["", "USD va UZS bitimlarining aylanmadagi ulushi:" if uz else "Доля сделок в USD и в UZS в обороте:"]
+        for c in m["currency"]:
+            share, share_deals = c["share_value"], c["share_deals"]
+            name = ("USD bitimlari" if c["cur"] == "USD" else "UZS (so‘m) bitimlari") if uz else (
+                "Сделки в USD (в сумах)" if c["cur"] == "USD" else "Сделки в UZS (сум)")
+            out.append(
+                f"• {name}: {money(c['value'])} — {share:.2f}% aylanma, {fmt_num(c['deals'])} ta bitim ({share_deals:.2f}%)"
+                if uz else
+                f"• {name}: {money(c['value'])} — {share:.2f}% оборота, {fmt_num(c['deals'])} сделок ({share_deals:.2f}%)"
+            )
+        return "\n".join(out)
+
+    if result.intent == "deal_summary":
+        r = rows[0]
+        if uz:
+            return (f"Bitimlar soni: {fmt_num(r['deals_all'])} ta (shundan bekor qilingan {fmt_num(r['annulled'])} ta).\n"
+                    f"Umumiy savdo summasi: {fmt_money(r['total_uzs'], p.lang)} ({fmt_num(r['deals_counted'])} ta bekor qilinmagan bitim).\n"
+                    f"Bitta bitimga o‘rtacha summa: {fmt_money(r['avg_uzs'], p.lang)} "
+                    f"(umumiy summa ÷ {fmt_num(r['deals_counted'])}).")
+        return (f"Количество сделок: {fmt_num(r['deals_all'])} (из них аннулировано {fmt_num(r['annulled'])}).\n"
+                f"Общая сумма сделок: {fmt_money(r['total_uzs'], p.lang)} ({fmt_num(r['deals_counted'])} неаннулированных сделок).\n"
+                f"Средняя сумма одной сделки: {fmt_money(r['avg_uzs'], p.lang)} "
+                f"(общая сумма ÷ {fmt_num(r['deals_counted'])}).")
+
     if result.intent == "avg_deal":
         r = rows[0]
         if uz:
@@ -533,7 +715,8 @@ def format_extra(result, p, fmt_num, fmt_money, fmt_date) -> str:
 
     if result.intent == "breakdown":
         dim, metric, note, unit = (result.meta.get(k) for k in ("dim", "metric", "note", "unit"))
-        names = {"weekday": ("hafta kunlari", "дням недели"), "region": ("viloyatlar", "регионам"), "product": ("tovarlar", "товарам")}[dim]
+        names = {"weekday": ("hafta kunlari", "дням недели"), "region": ("viloyatlar", "регионам"),
+                 "product": ("tovarlar", "товарам"), "category": ("kategoriyalar", "категориям")}[dim]
         mname = {"count": ("bitimlar soni", "количество сделок"), "amount": ("summa (so‘m)", "сумма (сум)"),
                  "volume": ("hajm", "объём"), "avg_price": ("o‘rtacha narx", "средняя цена"),
                  "participants": ("kompaniyalar soni (ishtirokchilar reyestri)", "количество компаний (реестр участников)")}[metric]

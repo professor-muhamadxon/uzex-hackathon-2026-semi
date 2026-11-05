@@ -291,16 +291,16 @@ def top_query(p: ParsedQuery) -> QueryResult:
                 LEFT JOIN participants p ON p.inn = d.{inn_col}
                 WHERE {where}
                 GROUP BY d.{inn_col}, p.name
-                ORDER BY value {direction} NULLS LAST
+                ORDER BY value {direction} NULLS LAST, code
                 LIMIT {p.top_n}
             """
         else:
             sql = f"""
                 WITH sides AS (
-                    SELECT seller_inn AS inn, amount_uzs, volume, unit_price, currency, deal_id
+                    SELECT seller_inn AS inn, amount, amount_uzs, volume, unit_price, currency, deal_id
                     FROM deals_enriched WHERE {where}
                     UNION
-                    SELECT buyer_inn AS inn, amount_uzs, volume, unit_price, currency, deal_id
+                    SELECT buyer_inn AS inn, amount, amount_uzs, volume, unit_price, currency, deal_id
                     FROM deals_enriched WHERE {where}
                 )
                 SELECT s.inn AS code, p.name AS label,
@@ -309,7 +309,7 @@ def top_query(p: ParsedQuery) -> QueryResult:
                 FROM sides s
                 LEFT JOIN participants p ON p.inn = s.inn
                 GROUP BY s.inn, p.name
-                ORDER BY value {direction} NULLS LAST
+                ORDER BY value {direction} NULLS LAST, code
                 LIMIT {p.top_n}
             """
     elif group == "product":
@@ -352,10 +352,10 @@ def top_query(p: ParsedQuery) -> QueryResult:
     elif group == "broker":
         sql = f"""
             WITH sides AS (
-                SELECT seller_broker AS broker_code, amount_uzs, volume, unit_price, currency, deal_id
+                SELECT seller_broker AS broker_code, amount, amount_uzs, volume, unit_price, currency, deal_id
                 FROM deals_enriched WHERE {where}
                 UNION
-                SELECT buyer_broker AS broker_code, amount_uzs, volume, unit_price, currency, deal_id
+                SELECT buyer_broker AS broker_code, amount, amount_uzs, volume, unit_price, currency, deal_id
                 FROM deals_enriched WHERE {where}
             )
             SELECT s.broker_code AS code, b.name AS label,

@@ -64,6 +64,78 @@ Kompyuter yoniq turganda bot javob beradi.
 
 ---
 
+## Monitoring: savollarni ikkinchi botga nusxalash
+
+Botga kelgan har bir savol (va ixtiyoriy ravishda javob) belgilangan Telegram chatga
+nusxalanadi. Nusxani **ikkinchi botning tokeni** yuboradi — savollar `@ikkinchi_bot`
+nomidan monitoring guruhiga tushadi.
+
+> **Muhim:** Telegram Bot API bir botning xabarini boshqa botga yetkazmaydi
+> (`bots can't send messages to bots`). Shuning uchun “ikkinchi botga yuborish” amalda
+> **ikkinchi bot nomidan kuzatuv chatiga yuborish** deb amalga oshirilgan: ikkinchi
+> botning kodini oʻzgartirish shart emas, faqat token va chat id kerak.
+
+```
+foydalanuvchi → bot A (agent) ──nusxa──→ monitoring chat (yuboruvchi: bot B)
+```
+
+### Sozlash
+
+1. Ikkinchi botni [@BotFather](https://t.me/BotFather) orqali yarating (yoki mavjudini
+   oling) va tokenini saqlang.
+2. Uni kuzatuv guruhiga aʼzo qiling; kanal boʻlsa — administrator va “Post messages”
+   huquqi bilan.
+3. `.env` fayliga yozing:
+
+```env
+RELAY_BOT_TOKEN=987654:XYZ...
+RELAY_CHAT_ID=-1001234567890
+RELAY_ANSWERS=1
+RELAY_SQL=0
+```
+
+4. Chat id topish (buning uchun botni bir marta toʻxtating):
+
+```bash
+python scripts/relay_test.py --find
+```
+
+5. Tekshirish — bitta test xabari yuboriladi, xato boʻlsa izoh chiqadi:
+
+```bash
+python scripts/relay_test.py
+```
+
+6. Botni odatdagidek ishga tushiring — relay avtomatik qoʻshiladi:
+
+```bash
+python run.py --bot        # yoki ./run.sh --bot
+```
+
+| Oʻzgaruvchi | Maʼnosi |
+|---|---|
+| `RELAY_CHAT_ID` | qabul qiluvchi chat: guruh `-100…`, kanal `@nom` yoki shaxsiy chat id |
+| `RELAY_BOT_TOKEN` | nusxani yuboruvchi bot tokeni (boʻsh boʻlsa — asosiy bot) |
+| `RELAY_ENABLED` | `0` — relay butunlay oʻchadi |
+| `RELAY_ANSWERS` | `1` — javob ham yuboriladi, `0` — faqat savollar |
+| `RELAY_SQL` | `1` — javob nusxasiga bajarilgan SQL ham qoʻshiladi |
+| `RELAY_THREAD_ID` | guruhdagi forum mavzusi (topic) idʼsi |
+
+Xususiyatlar:
+
+- Yuborish fon oqimida (cheklangan navbat + bitta worker) — Telegram sekinlashsa ham
+  foydalanuvchi javobni kutmaydi.
+- Xatolar faqat logga yoziladi (`relay: send failed…`), bot ishlashda davom etadi.
+- Savol va javob bir chatda tartib bilan koʻrinadi; timeout va texnik xatoliklar ham
+  qayd etiladi.
+- Har bir nusxada kanal, foydalanuvchi, chat va vaqt koʻrsatiladi.
+
+> Maxfiylik: savollar va foydalanuvchi idʼlari uchinchi chatga nusxalanadi —
+> foydalanuvchilarni ogohlantiring va monitoring chatini faqat jamoa koʻradigan
+> joyda saqlang.
+
+---
+
 ## FastAPI
 
 ```bash
@@ -120,8 +192,10 @@ Muhim qoidalar:
 | `app/cli.py` | terminal interfeysi |
 | `app/api.py` | FastAPI `/ask`, `/health` |
 | `app/bot.py` | aiogram 3 Telegram bot (polling) |
+| `app/relay.py` | savollarni monitoring chatga nusxalash (fon oqimida) |
 | `scripts/build_db.py` | bazani yig‘ish |
 | `scripts/smoke_test.py` | 33 ta end-to-end test |
+| `scripts/relay_test.py` | `RELAY_*` sozlamalarini tekshirish |
 
 ### Ma’lumotlar sxemasi (asosiy)
 
@@ -145,7 +219,10 @@ LLM_ENABLED=1
 LLM_BASE_URL=http://localhost:11434/v1   # Ollama
 LLM_API_KEY=ollama
 LLM_MODEL=qwen2.5-coder:7b
-LLM_TIMEOUT=45
+LLM_TIMEOUT=60
+# qwen3 kabi “thinking” modellari butun token budjetini reasoningga sarflab,
+# bo‘sh javob qaytaradi — “none” buni o‘chiradi (Ollama kengaytmasi).
+LLM_REASONING_EFFORT=none
 ```
 
 Cloud misoli:

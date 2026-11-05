@@ -23,6 +23,8 @@ from aiogram.types import (
 
 from .config import TELEGRAM_BOT_TOKEN
 from .qalog import ask_logged
+from .relay import relay
+from .tgstyle import style
 
 logging.basicConfig(level=logging.INFO)
 
@@ -152,13 +154,45 @@ async def help_handler(message: Message) -> None:
     await message.answer(HELP)
 
 
-async def _answer(message: Message, question: str, user_id: int) -> None:
+def _styled_parts(answer: str) -> list[str]:
+    """Plain answer -> Telegram HTML parts (< 4096 chars each); falls back to escaped plain text."""
+    try:
+        parts = [style(chunk) for chunk in _chunks(answer, limit=2200)]
+        if all(len(part) <= 3900 for part in parts):
+            return parts
+    except Exception:  # noqa: BLE001 - presentation must never block the answer
+        logging.exception("style failed")
+    return _chunks(html.escape(answer))
+
+
+async def _answer(
+    message: Message,
+    question: str,
+    user_id: int,
+    username: str | None = None,
+    channel: str = "telegram",
+) -> None:
+    relay.question(
+        question=question,
+        user_id=user_id,
+        username=username,
+        chat_id=message.chat.id,
+        channel=channel,
+    )
     status = await message.answer("⏳ Tahlil qilinmoqda... / Анализирую...")
     try:
         response, elapsed = await asyncio.wait_for(
             asyncio.to_thread(ask_logged, question, "telegram", user_id), timeout=80
         )
     except asyncio.TimeoutError:
+        relay.answer(
+            question=question,
+            answer="⏳ 80 soniyada javob topilmadi (timeout).",
+            seconds=80.0,
+            lang="—",
+            intent="timeout",
+            channel=channel,
+        )
         await status.edit_text(
             "Javobni 80 soniyada hisoblab bo‘lmadi — savolni aniqroq yozing.\n"
             "Не удалось вычислить ответ за 80 секунд — уточните вопрос."
@@ -166,13 +200,36 @@ async def _answer(message: Message, question: str, user_id: int) -> None:
         return
     except Exception:
         logging.exception("question failed")
+        relay.answer(
+            question=question,
+            answer="⚠️ Texnik xatolik (exception). Batafsil: logs/bot.out.",
+            seconds=0.0,
+            lang="—",
+            intent="error",
+            channel=channel,
+        )
         await status.edit_text(
             "Kechirasiz, texnik xatolik yuz berdi. Qayta urinib ko‘ring.\n"
             "Извините, произошла техническая ошибка. Попробуйте ещё раз."
         )
         return
 
-    parts = _chunks(html.escape(response.answer))
+    relay.answer(
+        question=question,
+        answer=response.answer,
+        seconds=elapsed,
+        lang=response.lang,
+        intent=response.intent,
+        sql=response.sql,
+        filters=response.filters,
+        channel=channel,
+    )
+
+    parts = _styled_parts(response.answer)
+    timing = (
+        f"⏱ Javob vaqti: {elapsed:.2f} s" if response.lang == "uz" else f"⏱ Время ответа: {elapsed:.2f} с"
+    )
+    parts[-1] = f"{parts[-1]}\n\n<i>{timing}</i>"
     markup = None
     if response.sql:
         key = f"{message.chat.id}:{status.message_id}"
@@ -203,7 +260,8 @@ async def question_handler(message: Message) -> None:
         await message.answer("⏱ Bir oz kuting… / Подождите пару секунд…")
         return
     _last_question[user_id] = now
-    await _answer(message, question[:500], user_id)
+    username = message.from_user.username if message.from_user else None
+    await _answer(message, question[:500], user_id, username)
 
 
 async def example_callback(callback: CallbackQuery) -> None:
@@ -213,7 +271,13 @@ async def example_callback(callback: CallbackQuery) -> None:
     if callback.message is None:
         return
     await callback.message.answer(f"❓ {html.escape(question)}", parse_mode=ParseMode.HTML)
-    await _answer(callback.message, question, callback.from_user.id)
+    await _answer(
+        callback.message,
+        question,
+        callback.from_user.id,
+        callback.from_user.username,
+        channel="telegram-misol",
+    )
 
 
 async def explain_callback(callback: CallbackQuery) -> None:
@@ -262,8 +326,12 @@ async def main() -> None:
     dispatcher.message.register(question_handler, F.text)
     dispatcher.callback_query.register(example_callback, F.data.startswith("ex:"))
     dispatcher.callback_query.register(explain_callback, F.data.startswith("sql:"))
+    await relay.start()
     print("Telegram bot polling boshlandi...")
-    await dispatcher.start_polling(bot)
+    try:
+        await dispatcher.start_polling(bot)
+    finally:
+        await relay.close()
 
 
 if __name__ == "__main__":
