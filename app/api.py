@@ -12,6 +12,13 @@ from .qalog import ask_logged
 app = FastAPI(title="UZEX AI Agent", version="0.2.0")
 
 
+@app.on_event("startup")
+def _warm_up() -> None:
+    from .warmup import start_in_background
+
+    start_in_background()  # catalog, RAG index and the local model are loaded in the background
+
+
 class AskRequest(BaseModel):
     question: str = Field(..., max_length=500)
 

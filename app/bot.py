@@ -25,6 +25,7 @@ from .config import TELEGRAM_BOT_TOKEN
 from .qalog import ask_logged
 from .relay import relay
 from .tgstyle import style
+from .warmup import start_in_background as start_warmup
 
 logging.basicConfig(level=logging.INFO)
 
@@ -326,6 +327,7 @@ async def main() -> None:
     dispatcher.message.register(question_handler, F.text)
     dispatcher.callback_query.register(example_callback, F.data.startswith("ex:"))
     dispatcher.callback_query.register(explain_callback, F.data.startswith("sql:"))
+    start_warmup()  # model + catalog + RAG are loaded in the background; the first question is not slower
     await relay.start()
     print("Telegram bot polling boshlandi...")
     try:
