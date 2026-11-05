@@ -1,0 +1,355 @@
+[
+ {
+  "id": 1,
+  "lang": "uz-lat",
+  "q": "2024-yilda jami savdo summasi qancha?",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE year(deal_date)=2024 AND {A}"
+ },
+ {
+  "id": 2,
+  "lang": "uz-lat",
+  "q": "2023-yilda nechta bitim tuzilgan?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE year(deal_date)=2023"
+ },
+ {
+  "id": 3,
+  "lang": "uz-lat",
+  "q": "Namangan viloyatida 2025-yilda jami summa qancha?",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE region_uz='Namangan viloyati' AND year(deal_date)=2025 AND {A}"
+ },
+ {
+  "id": 4,
+  "lang": "uz-lat",
+  "q": "2022-yilda qancha sement sotilgan?",
+  "type": "num",
+  "gold": "SELECT SUM(volume) FROM deals_enriched WHERE tnved_code='252329' AND year(deal_date)=2022 AND {A} GROUP BY unit ORDER BY 1 DESC LIMIT 1"
+ },
+ {
+  "id": 5,
+  "lang": "uz-lat",
+  "q": "2025-yilda bekor qilingan bitimlar soni",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE status='Аннулирован(Не оплачен)' AND year(deal_date)=2025"
+ },
+ {
+  "id": 6,
+  "lang": "uz-lat",
+  "q": "O‘tgan oyda eksport qancha dollar?",
+  "type": "num",
+  "gold": "SELECT SUM(amount) FROM deals_enriched WHERE contract_type='Экспортный' AND deal_date BETWEEN DATE '2026-09-01' AND DATE '2026-09-30' AND {A}"
+ },
+ {
+  "id": 7,
+  "lang": "uz-lat",
+  "q": "Broker BK010 bo‘yicha bitimlar soni",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE seller_broker='BK010' OR buyer_broker='BK010'"
+ },
+ {
+  "id": 8,
+  "lang": "uz-lat",
+  "q": "2026-yil 1-chorakda jami savdo summasi",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE deal_date BETWEEN DATE '2026-01-01' AND DATE '2026-03-31' AND {A}"
+ },
+ {
+  "id": 9,
+  "lang": "uz-lat",
+  "q": "Andijon viloyatida nechta bitim bo‘lgan?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE region_uz='Andijon viloyati'"
+ },
+ {
+  "id": 10,
+  "lang": "uz-lat",
+  "q": "2021-yilda jami savdo summasi qancha?",
+  "type": "not_found"
+ },
+ {
+  "id": 11,
+  "lang": "uz-cyr",
+  "q": "2025 йилда пахта бўйича жами сумма қанча?",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE tnved_code='520100' AND year(deal_date)=2025 AND {A}"
+ },
+ {
+  "id": 12,
+  "lang": "uz-cyr",
+  "q": "Тошкент шаҳрида 2024 йилда нечта битим бўлган?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE region_uz='Toshkent shahri' AND year(deal_date)=2024"
+ },
+ {
+  "id": 13,
+  "lang": "uz-cyr",
+  "q": "Ўтган йили экспорт неча доллар бўлган?",
+  "type": "num",
+  "gold": "SELECT SUM(amount) FROM deals_enriched WHERE contract_type='Экспортный' AND year(deal_date)=2025 AND {A}"
+ },
+ {
+  "id": 14,
+  "lang": "uz-cyr",
+  "q": "Маржа қанча?",
+  "type": "not_found"
+ },
+ {
+  "id": 15,
+  "lang": "uz-cyr",
+  "q": "«Олтин Бобо Савдо» МЧЖ қанча сотган?",
+  "type": "not_found"
+ },
+ {
+  "id": 16,
+  "lang": "uz-new",
+  "q": "2024-yilda şakar qança sotilgan?",
+  "type": "num",
+  "gold": "SELECT SUM(volume) FROM deals_enriched WHERE tnved_code='170199' AND year(deal_date)=2024 AND {A} GROUP BY unit ORDER BY 1 DESC LIMIT 1"
+ },
+ {
+  "id": 17,
+  "lang": "uz-new",
+  "q": "Ötgan yili jami savdo summasi qança?",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE year(deal_date)=2025 AND {A}"
+ },
+ {
+  "id": 18,
+  "lang": "uz-new",
+  "q": "2023-yilda bekor qilingan bitimlar soni qança?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE status='Аннулирован(Не оплачен)' AND year(deal_date)=2023"
+ },
+ {
+  "id": 19,
+  "lang": "uz-new",
+  "q": "2027-yilda nechta bitim böladi?",
+  "type": "not_found"
+ },
+ {
+  "id": 20,
+  "lang": "uz-new",
+  "q": "Fargʻona viloyatida jami summa qança?",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE region_uz='Farg‘ona viloyati' AND {A}"
+ },
+ {
+  "id": 21,
+  "lang": "ru",
+  "q": "Общая сумма сделок за 2025 год",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE year(deal_date)=2025 AND {A}"
+ },
+ {
+  "id": 22,
+  "lang": "ru",
+  "q": "Сколько сделок было в 2022 году?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE year(deal_date)=2022"
+ },
+ {
+  "id": 23,
+  "lang": "ru",
+  "q": "Сколько тонн пшеницы продано в 2024 году?",
+  "type": "num",
+  "gold": "SELECT SUM(volume) FROM deals_enriched WHERE tnved_code='100199' AND year(deal_date)=2024 AND {A} GROUP BY unit ORDER BY 1 DESC LIMIT 1"
+ },
+ {
+  "id": 24,
+  "lang": "ru",
+  "q": "Средняя цена хлопка в 2024 году",
+  "type": "num",
+  "gold": "SELECT AVG(unit_price) FROM deals_enriched WHERE tnved_code='520100' AND year(deal_date)=2024 AND {A}"
+ },
+ {
+  "id": 25,
+  "lang": "ru",
+  "q": "Экспорт за 2023 год в долларах",
+  "type": "num",
+  "gold": "SELECT SUM(amount) FROM deals_enriched WHERE contract_type='Экспортный' AND year(deal_date)=2023 AND {A}"
+ },
+ {
+  "id": 26,
+  "lang": "ru",
+  "q": "Количество аннулированных сделок в 2024 году",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE status='Аннулирован(Не оплачен)' AND year(deal_date)=2024"
+ },
+ {
+  "id": 27,
+  "lang": "ru",
+  "q": "Сумма сделок в Самаркандской области за 2025 год",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE region_uz='Samarqand viloyati' AND year(deal_date)=2025 AND {A}"
+ },
+ {
+  "id": 28,
+  "lang": "ru",
+  "q": "Сколько сделок в прошлом месяце?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE deal_date BETWEEN DATE '2026-09-01' AND DATE '2026-09-30'"
+ },
+ {
+  "id": 29,
+  "lang": "ru",
+  "q": "Сумма сделок в III квартале 2025 года",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE deal_date BETWEEN DATE '2025-07-01' AND DATE '2025-09-30' AND {A}"
+ },
+ {
+  "id": 30,
+  "lang": "ru",
+  "q": "Сколько исполненных сделок в 2025 году?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE status IN ('Исполнен','Исполнен(Частично)') AND year(deal_date)=2025"
+ },
+ {
+  "id": 31,
+  "lang": "ru",
+  "q": "Сумма сделок за последние 7 дней",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE deal_date BETWEEN DATE '2026-10-24' AND DATE '2026-10-30' AND {A}"
+ },
+ {
+  "id": 32,
+  "lang": "ru",
+  "q": "Информация о контракте 100001",
+  "type": "contains",
+  "gold": "SELECT product_name FROM contracts_full WHERE contract_id=100001"
+ },
+ {
+  "id": 33,
+  "lang": "ru",
+  "q": "Сделка 500000",
+  "type": "contains",
+  "gold": "SELECT seller_inn FROM deals_enriched WHERE deal_id=500000"
+ },
+ {
+  "id": 34,
+  "lang": "ru",
+  "q": "Компания с ИНН 999222902",
+  "type": "contains",
+  "gold": "SELECT name FROM participants WHERE inn='999222902'"
+ },
+ {
+  "id": 35,
+  "lang": "ru",
+  "q": "Сколько сделок по брокеру BK001 в 2024 году?",
+  "type": "num",
+  "gold": "SELECT COUNT(*) FROM deals_enriched WHERE (seller_broker='BK001' OR buyer_broker='BK001') AND year(deal_date)=2024"
+ },
+ {
+  "id": 36,
+  "lang": "ru",
+  "q": "Сумма сделок за 2020 год",
+  "type": "not_found"
+ },
+ {
+  "id": 37,
+  "lang": "ru",
+  "q": "Какая маржа у продавцов хлопка?",
+  "type": "not_found"
+ },
+ {
+  "id": 38,
+  "lang": "ru",
+  "q": "Сколько продала компания «Рога и копыта»?",
+  "type": "not_found"
+ },
+ {
+  "id": 39,
+  "lang": "ru",
+  "q": "Сделки за декабрь 2026 года",
+  "type": "not_found"
+ },
+ {
+  "id": 40,
+  "lang": "ru",
+  "q": "Сколько дизельного топлива продано в 2025 году?",
+  "type": "num",
+  "gold": "SELECT SUM(volume) FROM deals_enriched WHERE tnved_code='271019' AND year(deal_date)=2025 AND {A} GROUP BY unit ORDER BY 1 DESC LIMIT 1"
+ },
+ {
+  "id": 41,
+  "lang": "ru",
+  "q": "ИНН 111111111 сколько сделок?",
+  "type": "not_found"
+ },
+ {
+  "id": 42,
+  "lang": "uz-lat",
+  "q": "Zumrad Super Trade MCHJ 2025 yilda qancha sotgan?",
+  "type": "not_found"
+ },
+ {
+  "id": 43,
+  "lang": "uz-lat",
+  "q": "15.03.2025 dagi dollar kursi qancha?",
+  "type": "num",
+  "gold": "SELECT rate FROM usd_rates WHERE rate_date <= DATE '2025-03-15' ORDER BY rate_date DESC LIMIT 1"
+ },
+ {
+  "id": 44,
+  "lang": "ru",
+  "q": "Курс доллара на 01.06.2024",
+  "type": "num",
+  "gold": "SELECT rate FROM usd_rates WHERE rate_date <= DATE '2024-06-01' ORDER BY rate_date DESC LIMIT 1"
+ },
+ {
+  "id": 45,
+  "lang": "ru",
+  "q": "Какой регион лидирует по сумме сделок в 2025 году?",
+  "type": "contains",
+  "gold": "SELECT m.region_ru FROM deals_enriched d JOIN region_map m ON m.region_uz=d.region_uz WHERE year(d.deal_date)=2025 AND d.{A} GROUP BY 1 ORDER BY SUM(d.amount_uzs) DESC LIMIT 1"
+ },
+ {
+  "id": 46,
+  "lang": "ru",
+  "q": "Сколько уникальных покупателей было в 2024 году?",
+  "type": "num",
+  "gold": "SELECT COUNT(DISTINCT buyer_inn) FROM deals_enriched WHERE year(deal_date)=2024"
+ },
+ {
+  "id": 47,
+  "lang": "ru",
+  "q": "Самая крупная сделка в 2025 году",
+  "type": "contains",
+  "gold": "SELECT deal_id FROM deals_enriched WHERE year(deal_date)=2025 AND {A} ORDER BY amount_uzs DESC LIMIT 1"
+ },
+ {
+  "id": 48,
+  "lang": "uz-lat",
+  "q": "Eng birinchi bitim qachon tuzilgan?",
+  "type": "contains",
+  "gold": "SELECT strftime(deal_date, '%d.%m.%Y') FROM deals_enriched ORDER BY deal_date, deal_time, deal_id LIMIT 1"
+ },
+ {
+  "id": 49,
+  "lang": "uz-lat",
+  "q": "Bekor qilingan bitimlar ulushi necha foiz?",
+  "type": "contains",
+  "gold": "SELECT CAST(ROUND(100.0*COUNT(*) FILTER (WHERE status='Аннулирован(Не оплачен)')/COUNT(*),2) AS VARCHAR) FROM deals_enriched"
+ },
+ {
+  "id": 50,
+  "lang": "uz-lat",
+  "q": "2024 va 2025 yillarda jami summani solishtiring",
+  "type": "num",
+  "gold": "SELECT SUM(amount_uzs) FROM deals_enriched WHERE year(deal_date)=2024 AND {A}"
+ },
+ {
+  "id": 51,
+  "lang": "uz-cyr",
+  "q": "2024 йилда нечта ноёб харидор бўлган?",
+  "type": "num",
+  "gold": "SELECT COUNT(DISTINCT buyer_inn) FROM deals_enriched WHERE year(deal_date)=2024"
+ },
+ {
+  "id": 52,
+  "lang": "ru",
+  "q": "Курс доллара на 01.01.2021",
+  "type": "not_found"
+ }
+]

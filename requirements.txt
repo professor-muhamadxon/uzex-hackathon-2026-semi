@@ -1,0 +1,9 @@
+duckdb>=1.1
+fastapi>=0.115
+uvicorn[standard]>=0.30
+aiogram>=3.13
+pydantic>=2.8
+python-dotenv>=1.0
+sqlglot>=25.0
+rapidfuzz>=3.9
+openai>=1.50

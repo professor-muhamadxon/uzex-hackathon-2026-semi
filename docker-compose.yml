@@ -1,0 +1,23 @@
+services:
+  bot:
+    build: .
+    env_file: .env
+    restart: always
+    command: python -m app.bot
+    volumes:
+      - ./logs:/app/logs
+
+  web:
+    build: .
+    env_file: .env
+    restart: always
+    command: uvicorn app.api:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
