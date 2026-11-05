@@ -209,3 +209,18 @@ rejimida ishlagani uchun ingress/HTTPS talab qilinmaydi; FastAPI kerak bo‘lsa,
 - Kompaniya nomlari kirill/lotin aralash; fuzzy matching ishlatiladi, lekin juda
   qisqa yoki umumiy nomlarda INN bilan aniqlashtirish tavsiya etiladi.
 - Telegram tokeni `.env`da saqlanadi va repoga qo‘shilmaydi.
+
+## Quick start (`run.sh` / `run.py`)
+
+```bash
+./run.sh              # venv + deps + DB (first run), then web (http://localhost:8000) + Telegram bot
+./run.sh --web        # only the web app
+./run.sh --bot        # only the bot (needs TELEGRAM_BOT_TOKEN in .env)
+./run.sh --port 9000  # another web port
+./run.sh --check      # smoke tests + eval
+./run.sh --bg         # background (nohup); stop with ./run.sh --stop
+```
+
+`run.py` restarts a crashed web app or bot automatically and refuses to start a second bot
+instance (Telegram allows only one poller per token). Logs: `logs/web.out`, `logs/bot.out`,
+`logs/qa.jsonl`.
